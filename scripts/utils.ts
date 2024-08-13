@@ -17,13 +17,13 @@ async function verifyContract(deployedAddress: string) {
 
 export async function deployContract(contractName: string) {
   const [deployer] = await ethers.getSigners()
-  console.log('Deploying PaymentProcessor contract with the account:', deployer.address)
+  console.log(`Deploying ${contractName} contract with the account:`, deployer.address)
 
-  const PaymentProcessor = await ethers.getContractFactory(contractName)
-  const paymentProcessor = await PaymentProcessor.deploy()
-  await paymentProcessor.waitForDeployment()
+  const Contract = await ethers.getContractFactory(contractName)
+  const contract = await Contract.deploy()
+  await contract.waitForDeployment()
 
-  const deployedAddress = await paymentProcessor.getAddress()
+  const deployedAddress = await contract.getAddress()
   console.log(`${contractName} deployed to: ${deployedAddress}`)
 
   console.log('Waiting for Etherscan to update the contract data...')
