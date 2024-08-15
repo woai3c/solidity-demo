@@ -12,10 +12,7 @@
     "format": "prettier --write \"**/*.{js,ts,sol,json,md}\"",
     "deploy:mytoken": "hardhat run scripts/deployMyToken.ts --network sepolia",
     "deploy:paymentprocessor": "hardhat run scripts/deployPaymentProcessor.ts --network sepolia",
-    "deploy:mytoken:mainnet": "hardhat run scripts/deployMyToken.ts --network mainnet",
-    "deploy:paymentprocessor:mainnet": "hardhat run scripts/deployPaymentProcessor.ts --network mainnet",
-    "deploy": "npm run deploy:mytoken && npm run deploy:paymentprocessor",
-    "deploy:mainnet": "npm run deploy:mytoken:mainnet && npm run deploy:paymentprocessor:mainnet",
+    "deploys": "npm run deploy:mytoken && npm run deploy:paymentprocessor",
     "prepare": "husky"
   },
   "lint-staged": {

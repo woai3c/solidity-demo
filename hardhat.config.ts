@@ -3,15 +3,7 @@ import 'dotenv/config'
 import '@nomicfoundation/hardhat-toolbox'
 
 const config: HardhatUserConfig = {
-  solidity: {
-    version: '0.8.20',
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
-  },
+  solidity: '0.8.20',
   networks: {
     sepolia: {
       url: `https://sepolia.infura.io/v3/${process.env.TESTNET_INFURA_PROJECT_ID}`,
