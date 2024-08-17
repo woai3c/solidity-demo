@@ -10,7 +10,7 @@ contract MyToken is IERC20, Ownable {
 
   string public name;
   string public symbol;
-  uint8 public decimals = 18;
+  uint8 public decimals = 6;
   uint256 private _totalSupply;
 
   mapping(address => uint256) private _balances;
