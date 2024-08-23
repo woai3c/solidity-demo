@@ -18,7 +18,7 @@ contract PaymentProcessor is Ownable {
   event Withdrawal(address indexed to, uint256 amount);
   event PricePerLiterChanged(uint256 oldPrice, uint256 newPrice);
 
-  constructor(address tokenAddress) {
+  constructor(address tokenAddress, address initialOwner) Ownable(initialOwner) {
     token = IERC20(tokenAddress);
   }
 

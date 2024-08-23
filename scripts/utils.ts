@@ -19,18 +19,19 @@ async function verifyContract(deployedAddress: string, constructorArguments: str
 
 export async function deployContract(contractName: string, tokenAddress?: string) {
   const [deployer] = await ethers.getSigners()
-  console.log(`Deploying ${contractName} contract with the account:`, deployer.address)
+  const ownerAddress = deployer.address
+  console.log(`Deploying ${contractName} contract with the account:`, ownerAddress)
 
   const Contract = await ethers.getContractFactory(contractName)
   let contract
   let constructorArguments: string[] = []
   if (contractName === 'MyToken') {
     const symbol = 'MTK' // Replace with actual symbol
-    contract = await Contract.deploy(contractName, symbol)
-    constructorArguments = [contractName, symbol]
+    contract = await Contract.deploy(contractName, symbol, ownerAddress)
+    constructorArguments = [contractName, symbol, ownerAddress]
   } else {
-    contract = await Contract.deploy(tokenAddress)
-    constructorArguments = [tokenAddress!]
+    contract = await Contract.deploy(tokenAddress, ownerAddress)
+    constructorArguments = [tokenAddress!, ownerAddress]
   }
 
   await contract.waitForDeployment()

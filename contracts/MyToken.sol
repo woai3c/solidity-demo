@@ -16,7 +16,7 @@ contract MyToken is IERC20, Ownable {
   mapping(address => uint256) private _balances;
   mapping(address => mapping(address => uint256)) private _allowances;
 
-  constructor(string memory name_, string memory symbol_) {
+  constructor(string memory name_, string memory symbol_, address initialOwner) Ownable(initialOwner) {
     name = name_;
     symbol = symbol_;
   }
