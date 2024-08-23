@@ -3,8 +3,11 @@ pragma solidity ^0.8.19;
 
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
+import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
 contract PaymentProcessor is Ownable {
+  using SafeERC20 for IERC20;
+
   IERC20 public token;
   uint256 public pricePerLiter = 1;
 
@@ -25,10 +28,7 @@ contract PaymentProcessor is Ownable {
       revert InsufficientBalance(token.balanceOf(msg.sender), amount);
     }
 
-    bool success = token.transferFrom(msg.sender, address(this), amount);
-    if (!success) {
-      revert TransferFailed();
-    }
+    token.safeTransferFrom(msg.sender, address(this), amount);
 
     emit PaymentReceived(msg.sender, amount, liters);
   }
@@ -38,10 +38,7 @@ contract PaymentProcessor is Ownable {
       revert InsufficientBalance(token.balanceOf(address(this)), amount);
     }
 
-    bool success = token.transfer(owner(), amount);
-    if (!success) {
-      revert TransferFailed();
-    }
+    token.safeTransfer(owner(), amount);
 
     emit Withdrawal(owner(), amount);
   }
