@@ -9,7 +9,9 @@ contract PaymentProcessor is Ownable {
   using SafeERC20 for IERC20;
 
   IERC20 public token;
-  uint256 public pricePerLiter = 1;
+  uint256 public pricePerLiter = 1000000;
+
+  mapping(address => uint256) public litersPurchased;
 
   error InsufficientBalance(uint256 available, uint256 required);
   error TransferFailed();
@@ -30,6 +32,7 @@ contract PaymentProcessor is Ownable {
     token.safeTransferFrom(msg.sender, address(this), amount);
 
     uint256 liters = amount / pricePerLiter;
+    litersPurchased[msg.sender] += liters;
     emit PaymentReceived(msg.sender, amount, liters);
   }
 

@@ -1,7 +1,7 @@
 import { writeFileSync } from 'fs'
 import { run } from 'hardhat'
 
-export const delay = 20000
+export const delay = 30000
 
 async function verifyContract(deployedAddress: string, constructorArguments: string[]) {
   try {
