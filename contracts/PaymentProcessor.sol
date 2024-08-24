@@ -23,13 +23,13 @@ contract PaymentProcessor is Ownable {
   }
 
   function pay(uint256 amount) external {
-    uint256 liters = amount / pricePerLiter;
     if (token.balanceOf(msg.sender) < amount) {
       revert InsufficientBalance(token.balanceOf(msg.sender), amount);
     }
 
     token.safeTransferFrom(msg.sender, address(this), amount);
 
+    uint256 liters = amount / pricePerLiter;
     emit PaymentReceived(msg.sender, amount, liters);
   }
 

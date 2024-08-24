@@ -9,7 +9,10 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "baseUrl": ".",
-    "typeRoots": ["./node_modules/@types", "./types"]
+    "typeRoots": ["./node_modules/@types", "./types"],
+    "paths": {
+      "@tests/*": ["tests/*"]
+    }
   },
   "include": ["./**/*.ts", "types"],
   "exclude": ["node_modules"]

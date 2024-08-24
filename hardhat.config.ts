@@ -1,6 +1,8 @@
 import type { HardhatUserConfig } from 'hardhat/types'
 import 'dotenv/config'
 import '@nomicfoundation/hardhat-toolbox'
+import 'solidity-coverage'
+import 'tsconfig-paths/register'
 
 const config: HardhatUserConfig = {
   solidity: '0.8.20',
@@ -16,6 +18,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
+  },
+  paths: {
+    tests: './tests',
   },
 }
 
