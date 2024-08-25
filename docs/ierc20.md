@@ -1,3 +1,5 @@
+# IERC20 协议
+
 ## 使用
 
 ### 安装依赖
@@ -20,7 +22,7 @@ pnpm test
 pnpm test:coverage
 ```
 
-## IERC20 协议详解
+## 协议详解
 
 ### 简介
 
