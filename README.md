@@ -6,4 +6,4 @@
 
 ## 使用文档
 
-- [IERC20](docs/ierc20.md)
+- [IERC20 协议](docs/ierc20.md)
