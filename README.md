@@ -7,3 +7,4 @@
 ## 使用文档
 
 - [IERC20 协议](docs/ierc20.md)
+- [水龙头合约](docs/faucet.md)
