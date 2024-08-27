@@ -1,9 +1,10 @@
+import type { BaseContract, ContractFactory } from 'ethers'
 import { writeFileSync } from 'fs'
 import { run } from 'hardhat'
 
 export const delay = 30000
 
-async function verifyContract(deployedAddress: string, constructorArguments: string[]) {
+async function verifyContract(deployedAddress: string, constructorArguments: (string | number)[]) {
   try {
     await run('verify:verify', {
       address: deployedAddress,
@@ -17,22 +18,16 @@ async function verifyContract(deployedAddress: string, constructorArguments: str
   }
 }
 
-export async function deployContract(contractName: string, tokenAddress?: string) {
+export async function deployContract(
+  contractName: string,
+  callback: (contract: ContractFactory, ...args: string[]) => Promise<[BaseContract, (string | number)[]]>,
+) {
   const [deployer] = await ethers.getSigners()
   const ownerAddress = deployer.address
   console.log(`Deploying ${contractName} contract with the account:`, ownerAddress)
 
   const Contract = await ethers.getContractFactory(contractName)
-  let contract
-  let constructorArguments: string[] = []
-  if (contractName === 'MyToken') {
-    const symbol = 'MTK' // Replace with actual symbol
-    contract = await Contract.deploy(contractName, symbol, ownerAddress)
-    constructorArguments = [contractName, symbol, ownerAddress]
-  } else {
-    contract = await Contract.deploy(tokenAddress, ownerAddress)
-    constructorArguments = [tokenAddress!, ownerAddress]
-  }
+  const [contract, constructorArguments] = await callback(Contract, ownerAddress)
 
   await contract.waitForDeployment()
 
