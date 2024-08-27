@@ -14,7 +14,7 @@
         "parser": "solidity-parse",
         "bracketSpacing": true,
         "explicitTypes": "always",
-        "semi": false
+        "semi": true
       }
     }
   ]
