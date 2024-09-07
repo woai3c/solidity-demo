@@ -8,5 +8,6 @@
     "quotes": ["error", "single"],
     "prettier/prettier": "error"
   },
-  "plugins": ["prettier"]
+  "plugins": ["prettier"],
+  "ignorePatterns": ["node_modules/**"]
 }

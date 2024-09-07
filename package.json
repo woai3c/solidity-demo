@@ -9,6 +9,7 @@
     "lint:sol": "solhint 'contracts/**/*.sol' --fix",
     "format": "prettier --write \"**/*.{js,ts,sol,json,md}\"",
     "deploy:mytoken": "hardhat run scripts/deployMyToken.ts --network sepolia",
+    "deploy:mynft": "hardhat run scripts/deployMyNFT.ts --network sepolia",
     "deploy:paymentprocessor": "hardhat run scripts/deployPaymentProcessor.ts --network sepolia",
     "deploy:faucet": "hardhat run scripts/deployFaucet.ts --network sepolia",
     "deploys": "npm run deploy:mytoken && npm run deploy:paymentprocessor",
