@@ -33,7 +33,7 @@ export async function deployContract(
 
   const deployedAddress = await contract.getAddress()
   console.log(`${contractName} deployed to: ${deployedAddress}`)
-  writeFileSync(`cache//${contractName}`, deployedAddress)
+  writeFileSync(`cache/${contractName}`, deployedAddress)
 
   console.log('Waiting for Etherscan to update the contract data...')
   // eslint-disable-next-line no-promise-executor-return
