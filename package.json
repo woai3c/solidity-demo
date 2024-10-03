@@ -12,6 +12,7 @@
     "deploy:mynft": "hardhat run scripts/deployMyNFT.ts --network sepolia",
     "deploy:paymentprocessor": "hardhat run scripts/deployPaymentProcessor.ts --network sepolia",
     "deploy:faucet": "hardhat run scripts/deployFaucet.ts --network sepolia",
+    "deploy:dutchAuction": "hardhat run scripts/deployDutchAuction.ts --network sepolia",
     "deploys": "npm run deploy:mytoken && npm run deploy:paymentprocessor",
     "prepare": "husky",
     "test": "hardhat test",
