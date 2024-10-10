@@ -1,4 +1,4 @@
-import * as crypto from 'crypto'
+import { createHash } from 'crypto'
 
 class MerkleTree {
   private leaves: string[]
@@ -11,7 +11,7 @@ class MerkleTree {
 
   // 使用 SHA-256 进行哈希
   private hash(data: string): string {
-    return crypto.createHash('sha256').update(data).digest('hex')
+    return createHash('sha256').update(data).digest('hex')
   }
 
   // 构建默克尔树
