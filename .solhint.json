@@ -1,13 +1,16 @@
 {
-  "extends": "solhint:recommended",
-  "rules": {
-    "compiler-version": ["error", "^0.8.19"],
-    "func-visibility": ["warn", { "ignoreConstructors": true }],
-    "max-line-length": "off",
-    "no-empty-blocks": "off",
-    "quotes": ["error", "single"],
-    "prettier/prettier": "error"
-  },
+  "extends": ["solhint:recommended", "plugin:prettier/recommended"],
   "plugins": ["prettier"],
+  "rules": {
+    "prettier/prettier": "error",
+    "quotes": "off",
+    "indent": "off",
+    "max-line-length": "off",
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "compiler-version": ["error", "^0.8.19"],
+    "no-empty-blocks": "off",
+    "no-inline-assembly": "warn",
+    "reason-string": ["warn", { "maxLength": 64 }]
+  },
   "ignorePatterns": ["node_modules/**"]
 }
