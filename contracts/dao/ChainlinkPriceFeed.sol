@@ -6,6 +6,12 @@ import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { IPriceFeed } from './types.sol';
 
 contract ChainlinkPriceFeed is IPriceFeed, Ownable {
+  // 自定义错误
+  error PriceFeedNotFound();
+  error StalePrice();
+  error InvalidPrice();
+  error InvalidFeedAddress();
+
   mapping(address => address) public priceFeeds;
 
   constructor() Ownable(msg.sender) {
@@ -16,7 +22,7 @@ contract ChainlinkPriceFeed is IPriceFeed, Ownable {
 
   function getPrice(address token) external view override returns (uint256) {
     address feedAddress = priceFeeds[token];
-    require(feedAddress != address(0), 'Price feed not found');
+    if (feedAddress == address(0)) revert PriceFeedNotFound();
 
     AggregatorV3Interface priceFeed = AggregatorV3Interface(feedAddress);
     (
@@ -27,15 +33,15 @@ contract ChainlinkPriceFeed is IPriceFeed, Ownable {
 
     ) = priceFeed.latestRoundData();
 
-    require(timeStamp > block.timestamp - 3600, 'Stale price');
-    require(price > 0, 'Invalid price');
+    if (timeStamp <= block.timestamp - 3600) revert StalePrice();
+    if (price <= 0) revert InvalidPrice();
 
     return uint256(price);
   }
 
   // 添加或更新价格源
   function addPriceFeed(address token, address feed) external onlyOwner {
-    require(feed != address(0), 'Invalid feed address');
+    if (feed == address(0)) revert InvalidFeedAddress();
     priceFeeds[token] = feed;
     emit PriceFeedUpdated(token, feed);
   }
