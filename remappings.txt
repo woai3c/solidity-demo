@@ -1,2 +1,4 @@
 @openzeppelin/=node_modules/@openzeppelin/
 @chainlink/=node_modules/@chainlink/
+@uniswap/v2-periphery/=node_modules/@uniswap/v2-periphery/
+@uniswap/v2-core/=node_modules/@uniswap/v2-core/
