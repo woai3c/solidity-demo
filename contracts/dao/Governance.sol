@@ -1,15 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import { EIP712 } from '@openzeppelin/contracts/utils/cryptography/EIP712.sol';
+import { EIP712Upgradeable } from '@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { ECDSA } from '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
-import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
-import { AccessControl } from '@openzeppelin/contracts/access/AccessControl.sol';
+import { ECDSA } from '@openzeppelin/contracts/utils/cryptography/ECDSA.sol'; // 使用非升级版本
+import { ReentrancyGuardUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
+import { PausableUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
+import { AccessControlUpgradeable } from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
+import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
+import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 
-contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
+contract Governance is
+  Initializable,
+  EIP712Upgradeable,
+  ReentrancyGuardUpgradeable,
+  PausableUpgradeable,
+  AccessControlUpgradeable,
+  UUPSUpgradeable
+{
   using SafeERC20 for IERC20;
 
   // Move role definitions to the top of contract
@@ -35,7 +44,8 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
     Succeeded, // 投票成功
     Executed, // 已执行
     Expired,
-    Canceled
+    Canceled,
+    Queued
   }
 
   // 优化提案结构 - 添加新字段
@@ -51,15 +61,26 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
     bool executed;
     bool canceled;
     uint256 eta;
+    string description; // 添加描述字段
     mapping(address => bool) hasVoted;
   }
 
+  // 优化提案存储
+  struct ProposalCore {
+    uint32 startBlock;
+    uint32 endBlock;
+    uint64 eta;
+    bool executed;
+    bool canceled;
+  }
+  mapping(uint256 => ProposalCore) private _proposalCores;
+
   // 状态变量优化
   mapping(uint256 => Proposal) public proposals;
-  IERC20 public immutable governanceToken;
+  IERC20 public governanceToken;
   uint256 public proposalCount;
-  uint256 public immutable votingDelay; // 提案创建到投票开始的区块数
-  uint256 public immutable votingPeriod; // 投票持续的区块数
+  uint256 public votingDelay; // 提案创建到投票开始的区块数
+  uint256 public votingPeriod; // 投票持续的区块数
   uint256 public quorumVotes; // 最小投票数要求
 
   // 投票委托
@@ -71,8 +92,15 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
   uint256 public constant MIN_DELAY = 2 days;
   uint256 public constant MAX_DELAY = 14 days;
 
+  // 时间锁定常量
+  uint256 public constant MINIMUM_DELAY = 2 days;
+  uint256 public constant MAXIMUM_DELAY = 14 days;
+
+  // 时间锁定映射
+  mapping(uint256 => uint256) public proposalTimelocks;
+
   // 常量优化
-  bytes32 private immutable DOMAIN_SEPARATOR;
+  bytes32 private DOMAIN_SEPARATOR;
   bytes32 public constant VOTE_TYPEHASH = keccak256('Vote(uint256 proposalId,bool support)');
   bytes32 public constant DELEGATION_TYPEHASH = keccak256('Delegation(address delegatee)');
 
@@ -100,26 +128,36 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
   event VotingDelaySet(uint256 oldVotingDelay, uint256 newVotingDelay);
   event ProposalThresholdSet(uint256 oldProposalThreshold, uint256 newProposalThreshold);
   event ProposalEmergencyCanceled(uint256 indexed proposalId, address indexed canceler);
+  event ProposalQueued(uint256 indexed proposalId, uint256 eta);
 
-  constructor(
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() {
+    _disableInitializers();
+  }
+
+  function initialize(
     address _token,
     uint256 _votingDelay,
     uint256 _votingPeriod,
     uint256 _quorumVotes
-  ) EIP712('DAOGovernance', '1') {
+  ) external initializer {
+    __EIP712_init('DAOGovernance', '1');
+    __ReentrancyGuard_init();
+    __Pausable_init();
+    __AccessControl_init();
+    __UUPSUpgradeable_init();
+
     governanceToken = IERC20(_token);
     votingDelay = _votingDelay;
     votingPeriod = _votingPeriod;
     quorumVotes = _quorumVotes;
-    DOMAIN_SEPARATOR = _domainSeparatorV4();
 
-    // 使用 _grantRole 替代 _setupRole
     _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _grantRole(ADMIN_ROLE, msg.sender);
-
-    // Grant admin role the ability to grant other roles
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
   }
+
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
   // 优化提案创建
   function propose(
@@ -144,6 +182,7 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
     proposal.startBlock = block.number + votingDelay;
     proposal.endBlock = proposal.startBlock + votingPeriod;
     proposal.eta = block.timestamp + MIN_DELAY;
+    proposal.description = description; // 保存描述
 
     emit ProposalCreated(
       proposalCount,
@@ -192,36 +231,18 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
   }
 
   // 提案执行
-  function execute(uint256 proposalId) external nonReentrant whenNotPaused {
+  function execute(uint256 proposalId) external payable {
+    require(state(proposalId) == ProposalState.Queued, 'Proposal not queued');
     Proposal storage proposal = proposals[proposalId];
-    if (proposal.executed) revert ProposalAlreadyExecuted(proposalId);
-    if (proposal.canceled) revert ProposalExpired(proposalId);
-    if (block.timestamp < proposal.eta) revert VotingClosed(block.timestamp, proposal.eta);
-    if (block.timestamp > proposal.eta + GRACE_PERIOD) revert ProposalExpired(proposalId);
 
-    ProposalState state = getProposalState(proposalId);
-    if (state != ProposalState.Succeeded) revert QuorumNotReached(0, 0);
+    require(block.timestamp >= proposal.eta, 'Timelock not expired');
+    require(block.timestamp <= proposal.eta + GRACE_PERIOD, 'Grace period expired');
 
     proposal.executed = true;
+    delete proposalTimelocks[proposalId];
 
-    for (uint256 i = 0; i < proposal.targets.length; ) {
-      (bool success, bytes memory returndata) = proposal.targets[i].call{ value: proposal.values[i] }(
-        proposal.calldatas[i]
-      );
-      if (!success) {
-        if (returndata.length > 0) {
-          assembly {
-            let returndata_size := mload(returndata)
-            revert(add(32, returndata), returndata_size)
-          }
-        } else {
-          revert ExecutionFailed('Call reverted');
-        }
-      }
-      unchecked {
-        ++i;
-      }
-    }
+    // 执行提案
+    _executeTransaction(proposal.targets, proposal.values, proposal.calldatas, proposal.description);
 
     emit ProposalExecuted(proposalId, block.timestamp);
   }
@@ -369,5 +390,83 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, AccessControl {
     if (newThreshold == 0) revert InvalidProposal('Zero threshold');
     emit ProposalThresholdSet(quorumVotes / 10, newThreshold);
     quorumVotes = newThreshold * 10;
+  }
+
+  function queue(uint256 proposalId) external {
+    ProposalState status = getProposalState(proposalId);
+    if (status != ProposalState.Succeeded) revert InvalidProposal('Proposal not succeeded');
+
+    Proposal storage proposal = proposals[proposalId];
+    proposal.eta = block.timestamp + MINIMUM_DELAY;
+    proposalTimelocks[proposalId] = proposal.eta;
+
+    emit ProposalQueued(proposalId, proposal.eta);
+  }
+
+  function _executeTransaction(
+    address[] memory targets,
+    uint256[] memory values,
+    bytes[] memory calldatas,
+    string memory description
+  ) internal {
+    string memory errorMessage = string(abi.encodePacked('Governor: call reverted without message'));
+
+    for (uint256 i = 0; i < targets.length; ) {
+      (bool success, bytes memory returndata) = targets[i].call{ value: values[i] }(calldatas[i]);
+      if (!success) {
+        if (returndata.length > 0) {
+          // Try to extract the revert reason
+          assembly {
+            let returndata_size := mload(returndata)
+            revert(add(32, returndata), returndata_size)
+          }
+        } else {
+          revert ExecutionFailed(errorMessage);
+        }
+      }
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  function state(uint256 proposalId) public view returns (ProposalState) {
+    if (proposalId > proposalCount) revert ProposalNotExists(proposalId);
+
+    Proposal storage proposal = proposals[proposalId];
+
+    if (proposal.canceled) {
+      return ProposalState.Canceled;
+    }
+
+    if (proposal.executed) {
+      return ProposalState.Executed;
+    }
+
+    if (block.number <= proposal.startBlock) {
+      return ProposalState.Pending;
+    }
+
+    if (block.number <= proposal.endBlock) {
+      return ProposalState.Active;
+    }
+
+    if (!_quorumReached(proposalId)) {
+      return ProposalState.Defeated;
+    }
+
+    if (!_proposalSucceeded(proposalId)) {
+      return ProposalState.Defeated;
+    }
+
+    if (proposal.eta == 0) {
+      return ProposalState.Succeeded;
+    }
+
+    if (block.timestamp >= proposal.eta && block.timestamp <= proposal.eta + GRACE_PERIOD) {
+      return ProposalState.Queued;
+    }
+
+    return ProposalState.Expired;
   }
 }

@@ -4,12 +4,20 @@ pragma solidity ^0.8.19;
 import { IUniswapV2Router02 } from '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
-import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
+import { ReentrancyGuardUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
+import { PausableUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
+import { OwnableUpgradeable } from '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
+import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 
-contract Strategy is ReentrancyGuard, Pausable, Ownable {
+contract Strategy is
+  Initializable,
+  ReentrancyGuardUpgradeable,
+  PausableUpgradeable,
+  OwnableUpgradeable,
+  UUPSUpgradeable
+{
   using SafeERC20 for IERC20;
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -23,6 +31,7 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
   error NotSupported(address token);
   error PriceImpactTooHigh(uint256 impact, uint256 max);
   error OperationNotReady(bytes32 operationId, uint256 unlockTime);
+  error ExceedsMaxInvestment();
 
   // 状态变量优化 - 使用紧凑存储
   struct PackedStrategy {
@@ -33,17 +42,17 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
   }
 
   // 常量定义
-  uint256 public constant MAX_SLIPPAGE = 1000; // 10%
+  uint256 public constant MAX_SLIPPAGE = 100; // 1%
   uint256 public constant DEADLINE_GRACE_PERIOD = 20 minutes;
   uint256 public constant MAX_TOKENS = 50; // 限制代币数量
   uint256 public constant MIN_TIMELOCK = 1 days; // 时间锁定期
   uint256 public constant MAX_PRICE_IMPACT = 1000; // 最大价格影响 10%
-  bytes32 public immutable DOMAIN_SEPARATOR; // EIP-712 域分隔符
+  uint256 public constant MAX_SINGLE_INVESTMENT = 1000 ether;
 
-  // 状态变量
-  address public immutable vault;
-  IUniswapV2Router02 public immutable router;
+  address public vault;
+  IUniswapV2Router02 public router;
   uint256 public slippageTolerance = 50; // 0.5%
+  bytes32 public DOMAIN_SEPARATOR;
 
   mapping(address => bool) public supportedTokens;
   mapping(address => PackedStrategy) public tokenStrategies;
@@ -54,7 +63,7 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
   event Withdrawn(address indexed token, uint256 amount, uint256 indexed timestamp);
   event RewardsHarvested(uint256 indexed totalValue, uint256 indexed timestamp);
   event StrategyUpdated(address indexed token, uint256 indexed targetPercentage, uint256 indexed rebalanceThreshold);
-  event EmergencyWithdraw(address indexed token, address indexed to, uint256 indexed amount);
+  event EmergencyWithdraw(address indexed token, uint256 indexed amount, uint256 timestamp);
   event PriceImpactChecked(address indexed tokenIn, address indexed tokenOut, uint256 impact);
   event SwapExecuted(
     address indexed tokenIn,
@@ -64,14 +73,25 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
     uint256 timestamp
   );
 
-  constructor(address _vault, address _router) ReentrancyGuard() Pausable() Ownable(msg.sender) {
+  /// @custom:oz-upgrades-unsafe-allow constructor
+  constructor() {
+    _disableInitializers();
+  }
+
+  function initialize(address _vault, address _router) external initializer {
+    __ReentrancyGuard_init();
+    __Pausable_init();
+    __Ownable_init(msg.sender);
+    __UUPSUpgradeable_init();
+
     if (_vault == address(0) || _router == address(0)) revert InvalidToken(address(0));
     vault = _vault;
     router = IUniswapV2Router02(_router);
     DOMAIN_SEPARATOR = keccak256(abi.encode(keccak256('Strategy'), block.chainid, address(this)));
   }
 
-  // 修饰符优化
+  function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
   modifier onlyVault() {
     if (msg.sender != vault) revert NotSupported(msg.sender);
     _;
@@ -92,8 +112,12 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
   }
 
   // 投资功能优化
-  function invest(address token, uint256 amount) external nonReentrant whenNotPaused onlyVault validToken(token) {
+  function invest(
+    address token,
+    uint256 amount
+  ) external nonReentrant whenNotPaused onlyVault validToken(token) returns (uint256) {
     if (amount == 0) revert InvalidAmount(amount, type(uint256).max);
+    if (amount > MAX_SINGLE_INVESTMENT) revert ExceedsMaxInvestment();
 
     // 缓存余额检查
     uint256 balanceBefore = IERC20(token).balanceOf(address(this));
@@ -109,6 +133,7 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
     _rebalanceIfNeeded(token);
 
     emit Invested(token, amount, block.timestamp);
+    return amount;
   }
 
   // 提取功能优化
@@ -189,21 +214,18 @@ contract Strategy is ReentrancyGuard, Pausable, Ownable {
   }
 
   // 紧急功能优化
-  function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner whenPaused {
-    if (to == address(0)) revert InvalidToken(to);
+  function emergencyWithdraw(address token) external onlyOwner whenPaused {
     if (token == address(0)) revert InvalidToken(token);
 
     uint256 balance = IERC20(token).balanceOf(address(this));
-    if (amount > balance) {
-      revert InsufficientBalance(token, amount, balance);
+    if (balance == 0) {
+      revert InsufficientBalance(token, balance, balance);
     }
 
-    bytes32 operationId = keccak256(abi.encode('EMERGENCY_WITHDRAW', token, to, amount, block.timestamp));
+    IERC20(token).safeTransfer(vault, balance);
 
-    _setTimelock(operationId);
-
-    IERC20(token).safeTransfer(to, amount);
-    emit EmergencyWithdraw(token, to, amount);
+    // 更新事件发送，添加时间戳
+    emit EmergencyWithdraw(token, balance, block.timestamp);
   }
 
   // 内部辅助函数

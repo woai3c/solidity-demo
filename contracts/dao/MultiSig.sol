@@ -198,6 +198,13 @@ contract MultiSig is ReentrancyGuard, Pausable {
     transaction.numConfirmations += 1;
     isConfirmed[_txId][msg.sender] = true;
 
+    // 自动执行
+    if (
+      transaction.numConfirmations >= threshold && !transaction.executed && block.timestamp >= transaction.queuedTime
+    ) {
+      executeTransaction(_txId);
+    }
+
     emit TransactionConfirmed(_txId, msg.sender);
   }
 

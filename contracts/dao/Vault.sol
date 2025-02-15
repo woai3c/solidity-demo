@@ -1,18 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import { ERC20 } from '@openzeppelin/contracts/token/ERC20/ERC20.sol';
+import { ERC20Upgradeable } from '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
+import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
+import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
+import { OwnableUpgradeable } from '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import { PausableUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
+import { ReentrancyGuardUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
-import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
-import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { IERC20Metadata } from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import { IPriceFeed } from './types.sol';
 import { ChainlinkPriceFeed } from './ChainlinkPriceFeed.sol';
 
-contract Vault is ERC20, ReentrancyGuard, Pausable, Ownable {
+contract Vault is
+  Initializable,
+  ERC20Upgradeable,
+  ReentrancyGuardUpgradeable,
+  PausableUpgradeable,
+  OwnableUpgradeable,
+  UUPSUpgradeable
+{
   using SafeERC20 for IERC20;
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -113,14 +122,56 @@ contract Vault is ERC20, ReentrancyGuard, Pausable, Ownable {
   // 收益认领事件
   event RewardClaimed(address indexed user, uint256 amount);
 
-  constructor(string memory name, string memory symbol, address _priceFeed) ERC20(name, symbol) Ownable(msg.sender) {
-    if (_priceFeed == address(0)) revert InvalidPriceFeed();
-
-    priceFeed = IPriceFeed(_priceFeed);
-    minimumDeposit = 1e12; // 0.000001 ETH, 1 ETH = 1e18 wei
-    minimunTokenDeposit = 1e6; // 根据 USDC/USDT 等 6 位精度代币设置
-    maxDeposit = 100 ether;
+  // 优化存储布局
+  struct PackedVaultData {
+    uint64 lastUpdateTime;
+    uint64 cooldownPeriod;
+    uint128 totalAssets;
   }
+  PackedVaultData internal vaultData;
+
+  // 添加详细事件
+  event FeesUpdated(uint256 indexed oldDepositFee, uint256 indexed newDepositFee, uint256 indexed timestamp);
+
+  function initialize(string memory name, string memory symbol, address[] memory supportedTokens) external initializer {
+    __ERC20_init(name, symbol);
+    __ReentrancyGuard_init();
+    __Pausable_init();
+    __Ownable_init(msg.sender); // Pass msg.sender as the initial owner
+    __UUPSUpgradeable_init();
+
+    // Initialize other state variables
+    minimumDeposit = 0.1 ether;
+    maxDeposit = 100 ether;
+    minimunTokenDeposit = 100 * 1e6; // 100 USDC
+
+    // Initialize fee structure
+    fees = Fee({
+      depositFee: 50, // 0.5%
+      withdrawFee: 50, // 0.5%
+      managementFee: 200 // 2%
+    });
+
+    // Add initial supported tokens
+    for (uint256 i = 0; i < supportedTokens.length; ) {
+      if (supportedTokens[i] != address(0)) {
+        _addToken(supportedTokens[i]);
+      }
+      unchecked {
+        ++i;
+      }
+    }
+  }
+
+  // Helper function to add token
+  function _addToken(address token) private {
+    if (!_isContract(token)) revert InvalidToken();
+    supportedTokensSet.add(token);
+    tokenDecimals[token] = IERC20Metadata(token).decimals();
+    emit TokenAdded(token);
+  }
+
+  function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
   // =========================
   // 存款函数
@@ -321,8 +372,10 @@ contract Vault is ERC20, ReentrancyGuard, Pausable, Ownable {
     if (_withdrawFee > 1000) revert InvalidAmount();
     if (_managementFee > 500) revert InvalidAmount(); // 最大5%
 
+    uint256 oldDepositFee = fees.depositFee;
     fees = Fee(_depositFee, _withdrawFee, _managementFee);
     emit FeeUpdated(_depositFee, _withdrawFee, _managementFee);
+    emit FeesUpdated(oldDepositFee, _depositFee, block.timestamp);
   }
 
   // 分配收益

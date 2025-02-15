@@ -3,6 +3,8 @@ import 'dotenv/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'solidity-coverage'
 import 'tsconfig-paths/register'
+import '@openzeppelin/hardhat-upgrades'
+import '@nomiclabs/hardhat-ethers'
 
 const config: HardhatUserConfig = {
   solidity: '0.8.20',
