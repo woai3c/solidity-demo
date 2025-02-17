@@ -21,10 +21,6 @@ const config: HardhatUserConfig = {
     sepolia: {
       url: `https://sepolia.infura.io/v3/${process.env.TESTNET_INFURA_PROJECT_ID}`,
       accounts: [`0x${process.env.TESTNET_PRIVATE_KEY}`],
-      timeout: 60000, // Add timeout of 60 seconds
-      // Add gas configuration
-      gasPrice: 'auto',
-      gas: 'auto',
     },
     // mainnet: {
     //   url: `https://sepolia.infura.io/v3/${process.env.MAINNET_INFURA_PROJECT_ID}`,
