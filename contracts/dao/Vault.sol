@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.22;
 
 import { ERC20Upgradeable } from '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
@@ -13,6 +13,7 @@ import { IERC20Metadata } from '@openzeppelin/contracts/token/ERC20/extensions/I
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import { IPriceFeed } from './types.sol';
 import { ChainlinkPriceFeed } from './ChainlinkPriceFeed.sol';
+import { IAccessControl } from './types.sol';
 
 contract Vault is
   Initializable,
@@ -39,6 +40,10 @@ contract Vault is
   error NotAuthorized();
   error InvalidPrice();
   error OperationFailed();
+  error InvalidAccessControl();
+  error UnauthorizedAccess();
+  error InvalidGovernance();
+  error InvalidStrategy();
 
   // 价格预言机
   IPriceFeed public priceFeed;
@@ -100,6 +105,9 @@ contract Vault is
   // 收益存入事件
   event ProfitDeposited(uint256 amount);
   event TokenProfitDeposited(address indexed token, uint256 amount);
+  event AccessControlSet(address indexed accessControl);
+  event GovernanceSet(address indexed oldGovernance, address indexed newGovernance);
+  event StrategySet(address indexed oldStrategy, address indexed newStrategy);
 
   // 收益分配相关状态变量
   struct RewardInfo {
@@ -133,12 +141,27 @@ contract Vault is
   // 添加详细事件
   event FeesUpdated(uint256 indexed oldDepositFee, uint256 indexed newDepositFee, uint256 indexed timestamp);
 
-  function initialize(string memory name, string memory symbol, address[] memory supportedTokens) external initializer {
+  // 添加 AccessControl 接口
+  IAccessControl public accessControl;
+
+  // 添加状态变量
+  address public governance;
+  address public strategy;
+
+  function initialize(
+    string memory name,
+    string memory symbol,
+    address[] memory supportedTokens,
+    address _accessControl // 添加参数
+  ) external initializer {
     __ERC20_init(name, symbol);
     __ReentrancyGuard_init();
     __Pausable_init();
     __Ownable_init(msg.sender); // Pass msg.sender as the initial owner
     __UUPSUpgradeable_init();
+
+    if (_accessControl == address(0)) revert InvalidAccessControl();
+    accessControl = IAccessControl(_accessControl);
 
     // Initialize other state variables
     minimumDeposit = 0.1 ether;
@@ -178,7 +201,7 @@ contract Vault is
   // =========================
 
   // 存入ETH
-  function deposit() external payable nonReentrant whenNotPaused {
+  function deposit() external payable nonReentrant whenNotPaused onlyWhitelisted checkLimit(msg.value) {
     if (msg.value < minimumDeposit) revert DepositTooLow();
     if (msg.value > maxDeposit) revert DepositTooHigh();
 
@@ -203,7 +226,10 @@ contract Vault is
   }
 
   // 存入ERC20代币
-  function depositToken(address token, uint256 amount) external nonReentrant whenNotPaused {
+  function depositToken(
+    address token,
+    uint256 amount
+  ) external nonReentrant whenNotPaused onlyWhitelisted checkLimit(amount) {
     uint256 minDeposit = (minimunTokenDeposit * (10 ** tokenDecimals[token])) / 1e6;
     if (amount < minDeposit) revert DepositTooLow();
     if (amount > maxDeposit) revert DepositTooHigh();
@@ -549,5 +575,46 @@ contract Vault is
     totalAssets += calculateUSDValue(token, amount);
 
     emit TokenProfitDeposited(token, amount);
+  }
+
+  // 添加访问控制修饰符
+  modifier onlyWhitelisted() {
+    if (!accessControl.isWhitelisted(msg.sender)) revert UnauthorizedAccess();
+    _;
+  }
+
+  // 添加权限检查
+  modifier checkLimit(uint256 amount) {
+    if (!accessControl.checkLimit(msg.sender, amount)) revert UnauthorizedAccess();
+    _;
+  }
+
+  // 添加 AccessControl 设置函数
+  function setAccessControl(address _accessControl) external onlyOwner {
+    if (_accessControl == address(0)) revert InvalidAccessControl();
+    accessControl = IAccessControl(_accessControl);
+    emit AccessControlSet(_accessControl);
+  }
+
+  // 添加设置 Governance 的函数
+  function setGovernance(address _governance) external onlyOwner {
+    if (_governance == address(0)) revert InvalidGovernance();
+    address oldGovernance = governance;
+    governance = _governance;
+    emit GovernanceSet(oldGovernance, _governance);
+  }
+
+  // 添加修饰符
+  modifier onlyGovernance() {
+    if (msg.sender != governance) revert UnauthorizedAccess();
+    _;
+  }
+
+  // 添加设置 Strategy 的函数
+  function setStrategy(address _strategy) external onlyOwner {
+    if (_strategy == address(0)) revert InvalidStrategy();
+    address oldStrategy = strategy;
+    strategy = _strategy;
+    emit StrategySet(oldStrategy, _strategy);
   }
 }

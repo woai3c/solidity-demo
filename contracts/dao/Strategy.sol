@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.22;
 
 import { IUniswapV2Router02 } from '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
@@ -13,9 +13,9 @@ import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableS
 
 contract Strategy is
   Initializable,
+  OwnableUpgradeable,
   ReentrancyGuardUpgradeable,
   PausableUpgradeable,
-  OwnableUpgradeable,
   UUPSUpgradeable
 {
   using SafeERC20 for IERC20;
@@ -51,7 +51,7 @@ contract Strategy is
 
   address public vault;
   IUniswapV2Router02 public router;
-  uint256 public slippageTolerance = 50; // 0.5%
+  uint256 public slippageTolerance;
   bytes32 public DOMAIN_SEPARATOR;
 
   mapping(address => bool) public supportedTokens;
@@ -79,14 +79,18 @@ contract Strategy is
   }
 
   function initialize(address _vault, address _router) external initializer {
+    __Ownable_init(msg.sender);
     __ReentrancyGuard_init();
     __Pausable_init();
-    __Ownable_init(msg.sender);
     __UUPSUpgradeable_init();
 
     if (_vault == address(0) || _router == address(0)) revert InvalidToken(address(0));
     vault = _vault;
     router = IUniswapV2Router02(_router);
+
+    // 将默认值设置移到此处
+    slippageTolerance = 50;
+
     DOMAIN_SEPARATOR = keccak256(abi.encode(keccak256('Strategy'), block.chainid, address(this)));
   }
 

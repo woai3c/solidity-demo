@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.22;
 
-import { TransparentUpgradeableProxy } from '@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol';
+import { ITransparentUpgradeableProxy } from './types.sol';
+
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
@@ -22,6 +23,8 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
   error InitializationFailed(address proxy, bytes data);
   error TimelockNotExpired(uint256 current, uint256 unlock);
   error InvalidImplementation(address implementation);
+  error NotRegisteredProxy(address proxy);
+  error AlreadyRegistered(address proxy);
 
   // 状态变量
   mapping(address => address) public implementations; // 代理合约 => 实现合约
@@ -29,6 +32,7 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
   mapping(address => bool) public registeredProxies; // 已注册的代理
   uint256 public constant UPGRADE_TIMELOCK = 2 days; // 升级等待期
   uint256 public constant GRACE_PERIOD = 3 days; // 宽限期
+  mapping(address => address) public getProxyImplementation; // 存储代理合约的实现地址
 
   // 事件定义
   event ProxyRegistered(address indexed proxy, address indexed implementation);
@@ -47,27 +51,24 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
     address implementation,
     bytes calldata initData
   ) external onlyOwner whenNotPaused nonReentrant {
-    if (!implementation.isContract()) revert NotAContract(implementation);
+    if (implementation.code.length == 0) revert NotAContract(implementation);
     if (registeredProxies[proxy]) revert AlreadyInitialized(proxy);
 
+    // Register
     registeredProxies[proxy] = true;
     implementations[proxy] = implementation;
+    getProxyImplementation[proxy] = implementation;
 
-    // 初始化代理
     if (initData.length > 0) {
-      try TransparentUpgradeableProxy(payable(proxy)).upgradeToAndCall(implementation, initData) {
-        // 初始化成功
-      } catch {
-        revert InitializationFailed(proxy, initData);
-      }
+      // Use our interface to call upgradeToAndCall
+      ITransparentUpgradeableProxy(payable(proxy)).upgradeToAndCall(implementation, initData);
     }
-
     emit ProxyRegistered(proxy, implementation);
   }
 
   function scheduleUpgrade(address proxy, address newImplementation) external onlyOwner whenNotPaused {
     if (!registeredProxies[proxy]) revert InvalidProxy(proxy);
-    if (!newImplementation.isContract()) revert NotAContract(newImplementation);
+    if (newImplementation.code.length == 0) revert NotAContract(newImplementation);
     if (implementations[proxy] == newImplementation) revert InvalidImplementation(newImplementation);
 
     upgradeTimeLocks[proxy] = block.timestamp + UPGRADE_TIMELOCK;
@@ -76,25 +77,21 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
   }
 
   function upgrade(address proxy, address newImplementation) external onlyOwner whenNotPaused nonReentrant {
-    // 验证时间锁
     uint256 unlockTime = upgradeTimeLocks[proxy];
-    if (block.timestamp < unlockTime) {
+    if (block.timestamp < unlockTime || block.timestamp > unlockTime + GRACE_PERIOD) {
       revert TimelockNotExpired(block.timestamp, unlockTime);
-    }
-    if (block.timestamp > unlockTime + GRACE_PERIOD) {
-      revert TimelockNotExpired(block.timestamp, unlockTime + GRACE_PERIOD);
     }
 
     address oldImplementation = implementations[proxy];
 
-    try TransparentUpgradeableProxy(payable(proxy)).upgradeTo(newImplementation) {
-      implementations[proxy] = newImplementation;
-      delete upgradeTimeLocks[proxy];
+    // Use our interface to call upgradeTo
+    ITransparentUpgradeableProxy(payable(proxy)).upgradeTo(newImplementation);
 
-      emit ProxyUpgraded(proxy, oldImplementation, newImplementation);
-    } catch {
-      revert UpgradeFailed(proxy, newImplementation);
-    }
+    implementations[proxy] = newImplementation;
+    getProxyImplementation[proxy] = newImplementation;
+    delete upgradeTimeLocks[proxy];
+
+    emit ProxyUpgraded(proxy, oldImplementation, newImplementation);
   }
 
   function cancelUpgrade(address proxy) external onlyOwner {
