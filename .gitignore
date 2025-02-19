@@ -2,6 +2,7 @@
 artifacts
 cache
 typechain-types
+.openzeppelin
 
 # Logs
 logs
