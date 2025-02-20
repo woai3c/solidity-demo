@@ -63,6 +63,7 @@
     "elliptic": "^6.6.1",
     "ethereum-waffle": "^4.0.10",
     "ethers": "^6.13.4",
-    "hardhat": "^2.22.17"
+    "hardhat": "^2.22.17",
+    "merkletreejs": "^0.4.1"
   }
 }

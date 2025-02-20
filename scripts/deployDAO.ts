@@ -1,7 +1,8 @@
 import { ethers, run, upgrades } from 'hardhat'
 import { writeFileSync } from 'fs'
-import { delay } from './utils'
+import { delay } from './utils/utils'
 import type { IGovernance, IVault } from './types'
+import { generateMerkleRoot } from './utils/generateMerkleRoot'
 
 export interface DeployConfig {
   // 基础配置
@@ -175,6 +176,12 @@ async function verifyContracts(contracts: Record<string, { address: string; args
 }
 
 async function main() {
+  const signers = [
+    process.env.SINER_WALLET1!, // 替换为你的测试钱包地址
+    process.env.SINER_WALLET2!, // 测试用地址
+    process.env.SINER_WALLET3!, // 测试用地址
+  ]
+
   const config: DeployConfig = {
     name: 'Test DAO',
     symbol: 'TDAO',
@@ -187,17 +194,13 @@ async function main() {
     votingPeriod: 100, // 约5小时
     quorumVotes: String(ethers.parseEther('100')), // 100 tokens
     router: '0xC532a74256D3Db42D0Bf7a0400fEFDbad7694008', // Sepolia Uniswap V2 Router
-    merkleRoot: '0x0000000000000000000000000000000000000000000000000000000000000000', // 测试用空merkle root
-    signers: [
-      process.env.SINER_WALLET1!, // 替换为你的测试钱包地址
-      process.env.SINER_WALLET2!, // 测试用地址
-      process.env.SINER_WALLET3!, // 测试用地址
-    ],
+    merkleRoot: generateMerkleRoot(signers).root, // 测试用空merkle root
+    signers,
     threshold: 2, // 测试环境只需要1个签名
     delay: 86400, // 添加延迟时间配置(1天)
     adminDelay: 1800, // 约6小时
   }
-
+  console.log(config.merkleRoot)
   const deployInfo = await deployDAOContracts(config)
   console.log('DAO deployed successfully!', deployInfo)
 }

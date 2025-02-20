@@ -1,4 +1,4 @@
-import { deployContract } from './utils'
+import { deployContract } from './utils/utils'
 
 function main() {
   const symbol = 'MTK'

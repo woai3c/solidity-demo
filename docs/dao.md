@@ -4,130 +4,47 @@
 
 基于智能合约的去中心化投资基金，允许用户通过存入加密资产获得治理代币，共同参与投资决策和收益分配。系统包含资金池管理、多签钱包、治理系统等核心模块。
 
-## 架构设计
+# 去中心化自治组织(DAO)
 
-```mermaid
-graph TD
-    A[用户] --> B[AccessControl]
-    A --> C[Vault]
-    A --> D[Governance]
-    B -->|权限验证| C
-    B -->|角色控制| D
-    C -->|资产托管| E[Strategy]
-    C -->|价格查询| F[ChainlinkPriceFeed]
-    D -->|提案执行| G[MultiSig]
-    E -->|投资操作| H[Uniswap/DEX]
-    G -->|多签管理| C
-    G -->|合约升级| I[ProxyAdmin]
-```
+## 架构概述
 
-## 核心模块
+本 DAO 项目采用模块化设计，主要包含以下核心组件：
 
-### 1. 资金池管理 (Vault)
+### 1. 访问控制 (AccessControl.sol)
 
-- **ERC4626标准**：支持多资产托管
-- **收益分配**：
-  ```solidity
-  function distributeYield(address asset) external {
-    uint256 yield = calculateYield(asset);
-    _mintShares(yield);
-    emit YieldDistributed(asset, yield);
-  }
-  ```
-- **费用结构**：
-  | 费用类型 | 费率 | 收取时机 |
-  |---------|------|---------|
-  | 管理费 | 0.5% | 每日结算 |
-  | 提现费 | 0.1% | 即时扣除 |
-  | 绩效费 | 15% | 收益分配时 |
+- 基于默克尔树的白名单系统
+- 分级权限控制(Tier 1-4)
+- 用户限额管理
+- 紧急暂停机制
 
-### 2. 多签钱包 (MultiSig)
+### 2. 资金库 (Vault.sol)
 
-- **权限分级**：
-  ```solidity
-  enum Role {
-    BASIC, // 基础交易
-    ADMIN, // 合约管理
-    SUPER_ADMIN // 权限修改
-  }
-  ```
-- **交易加速**：紧急情况下可支付3倍Gas加速
-- **批量执行**：最多支持10笔交易原子操作
+- ERC20 代币管理
+- 存取款业务逻辑
+- 收益分配系统
+- 费用管理
+- 与 Chainlink 预言机集成的价格发现
 
-### 3. 治理系统 (Governance)
+### 3. 治理系统 (Governance.sol)
 
-- **提案生命周期**：
-  ```mermaid
-  sequenceDiagram
-    用户->>+Governance: 创建提案
-    Governance-->>用户: 提案ID
-    用户->>+Governance: 委托投票
-    Governance-->>-用户: 投票凭证
-    Governance->>+TimeLock: 排队执行
-    TimeLock-->>-Governance: 就绪通知
-    Governance->>+Vault: 执行提案
-    Vault-->>-Governance: 执行结果
-  ```
-- **投票机制**：
-  - 链下签名投票（EIP-712）
-  - 委托投票权重计算
-  - 法定人数（Quorum）动态调整
+- 提案创建与投票
+- 时间锁定机制
+- 委托投票
+- 紧急取消机制
 
-### 4. 投资策略 (Strategy)
+### 4. 多签钱包 (MultiSig.sol)
 
-- **可插拔架构**：支持主流DeFi协议（Uniswap/Aave）
-- **收益再投资**：自动复利机制
-- **风险控制**：
-  ```solidity
-  struct RiskParams {
-    uint maxLeverage; // 最大杠杆率
-    uint minTVL; // 最小锁仓量
-    uint slippage; // 最大滑点
-  }
-  ```
+- 交易提交与确认
+- 角色分级(SUPER_ADMIN/ADMIN/BASIC)
+- 紧急处理机制
+- 交易执行超时保护
 
-### 5. 访问控制 (AccessControl)
+### 5. 投资策略 (Strategy.sol)
 
-- **动态白名单**：基于默克尔树的权限验证
-- **四级权限体系**：
-  - 普通用户（基础操作）
-  - 管理员（资金管理）
-  - 超级管理员（合约升级）
-  - 治理合约（提案执行）
-- **时间锁机制**：关键操作需等待48小时
-
-### 6. 合约升级 (Upgrade)
-
-- **代理模式**：透明代理（EIP-1967）
-- **升级流程**：
-  ```mermaid
-  graph TD
-      A[提案升级] --> B[多签确认]
-      B --> C[时间锁定]
-      C --> D[执行升级]
-      D --> E[状态迁移]
-  ```
-- **安全参数**：
-  ```solidity
-  MIN_DELAY = 2 days;   // 最短等待期
-  MAX_DELAY = 14 days;  // 最长等待期
-  GRACE_PERIOD = 7 days;// 宽限期
-  ```
-
-## 技术规范
-
-### 1. 智能合约架构
-
-| 合约名称            | 功能描述       |
-| ------------------- | -------------- |
-| `Vault.sol`         | 资金池管理核心 |
-| `MultiSig.sol`      | 多签钱包实现   |
-| `Governance.sol`    | 治理系统逻辑   |
-| `Strategy.sol`      | 投资策略模板   |
-| `AccessControl.sol` | 权限控制系统   |
-| `ProxyAdmin.sol`    | 代理合约管理   |
-| `DAOFactory.sol`    | 一键部署工厂   |
-| `Timelock.sol`      | 时间锁机制     |
+- 自动化投资逻辑
+- 资产再平衡
+- 收益收割
+- 风险控制
 
 ### 2. 部署流程
 
@@ -135,71 +52,164 @@ graph TD
 pnpm deploy:dao
 ```
 
+## 使用场景示例
+
+### 场景1: 创建投资提案
+
+```javascript
+// 1. 准备提案数据
+const targets = [strategy.address]
+const values = [0]
+const calldatas = [strategy.interface.encodeFunctionData('invest', [token.address, ethers.utils.parseEther('1000')])]
+const description = 'Invest 1000 USDC in Lending Protocol'
+
+// 2. 提交提案
+await governance.propose(targets, values, calldatas, description)
+const proposalId = await governance.proposalCount()
+
+// 3. 等待投票延迟
+await network.provider.send('evm_increaseTime', [votingDelay])
+
+// 4. 投票
+await governance.castVote(proposalId, true)
+
+// 5. 等待投票期结束
+await network.provider.send('evm_increaseTime', [votingPeriod])
+
+// 6. 执行提案
+await governance.execute(proposalId)
+```
+
+### 场景2: 多签钱包资金转移
+
+```javascript
+// 1. 提交转账交易
+const to = '0x...'
+const value = ethers.utils.parseEther('10')
+const data = '0x'
+await multiSig.submitTransaction(to, value, data)
+const txId = (await multiSig.transactionCount()) - 1
+
+// 2. 其他签名者确认
+await multiSig.connect(signer2).confirmTransaction(txId)
+await multiSig.connect(signer3).confirmTransaction(txId)
+
+// 3. 达到阈值后自动执行
+// 或手动执行
+await multiSig.executeTransaction(txId)
+```
+
+### 场景3: 紧急情况处理
+
+```javascript
+// 1. 暂停所有操作
+await vault.pause()
+
+// 2. 紧急提款
+await vault.emergencyWithdraw()
+
+// 3. 取消待执行的提案
+await governance.cancelProposal(proposalId)
+
+// 4. 恢复操作
+await vault.unpause()
+```
+
 ## 安全机制
 
-### 审计清单
+1. 时间锁定
 
-- [x] 时间锁覆盖所有管理功能
-- [x] 关键操作双因素验证
-- [ ] 跨链资产桥接审计（进行中）
+- 提案执行延迟: 2-14 天
+- 多签交易确认等待期: 24 小时
+- 升级冷却期: 48 小时
 
-### 紧急措施
+2. 权限分级
 
 ```solidity
-function emergencyPause() external onlyGovernance {
-  _pauseAll();
-  _revokeAllRoles();
-  emit EmergencyActivated(block.timestamp);
+enum Role {
+  BASIC,
+  ADMIN,
+  SUPER_ADMIN
 }
 ```
+
+3. 交易限额
+
+```solidity
+mapping(uint256 => uint256) public tierLimits;
+```
+
+4. 多重签名
+
+- 交易执行需要达到指定确认数
+- 重要操作需要高级角色确认
+
+5. 紧急暂停
+
+- 所有合约都继承 Pausable
+- 可以快速冻结危险操作
 
 ## 接口规范
 
-### 治理接口
+### IPriceFeed
 
-```typescript
-interface IGovernance {
-  function propose(address target, bytes calldata data) external returns (uint256);
-  function vote(uint256 proposalId, uint256 amount) external;
-  function execute(uint256 proposalId) external;
+价格预言机接口
+
+```solidity
+interface IPriceFeed {
+  function getPrice(address token) external view returns (uint256);
+  function addPriceFeed(address token, address feed) external;
 }
 ```
 
-### 资金池接口
+### IStrategy
 
-```typescript
-interface IVault {
-  function deposit(address asset, uint256 amount) external;
-  function withdraw(uint256 shares) external;
-  function getYield(address asset) external view returns (uint256);
+投资策略接口
+
+```solidity
+interface IStrategy {
+  function invest(address token, uint256 amount) external returns (bool);
+  function withdraw(address token, uint256 amount) external returns (bool);
+  function harvest() external returns (uint256 totalValue);
 }
 ```
 
-## 项目里程碑
+## 测试用例
 
-| 阶段     | 时间 | 主要内容                     |
-| -------- | ---- | ---------------------------- |
-| 基础设施 | 2周  | 开发环境搭建、基础合约实现   |
-| 核心功能 | 4周  | 资金池、多签、治理系统开发   |
-| 高级功能 | 3周  | 投资策略、访问控制、升级机制 |
-| 前端开发 | 3周  | UI/UX设计、功能实现          |
-| 测试部署 | 2周  | 安全审计、测试网部署         |
+```typescript
+describe("Vault", () => {
+  it("should deposit tokens and mint shares", async () => {
+    const amount = ethers.utils.parseEther("100");
+    await token.approve(vault.address, amount);
+    await vault.depositToken(token.address, amount);
 
-## 测试场景
+    const shares = await vault.balanceOf(user.address);
+    expect(shares).to.gt(0);
+  });
+});
 
-1. **资金操作测试**
+describe("Governance", () => {
+  it("should execute successful proposal", async () => {
+    // 创建提案
+    await governance.propose(...);
 
-   - 多资产存款/提现
-   - 收益分配验证
-   - 紧急暂停恢复
+    // 投票
+    await governance.castVote(proposalId, true);
 
-2. **治理流程测试**
+    // 检查状态
+    expect(await governance.state(proposalId)).to.equal(4); // Executed
+  });
+});
+```
 
-   - 提案创建到执行全流程
-   - 链下签名投票验证
-   - 时间锁延迟测试
+## 升级机制
 
-3. **异常处理测试**
-   - 合约升级回滚
-   - 多签权限变更
-   - 预言机失效处理
+合约采用 UUPS 代理模式，支持安全升级：
+
+```solidity
+function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+  // 验证新实现合约
+  if (!_isContract(newImplementation)) revert InvalidImplementation();
+  // 其他验证...
+}
+```

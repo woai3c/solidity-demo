@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import { deployContract } from './utils'
+import { deployContract } from './utils/utils'
 
 function main() {
   const tokenAddress = readFileSync('cache/MyToken', 'utf8')
