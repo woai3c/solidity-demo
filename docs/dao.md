@@ -1,215 +1,254 @@
-# 去中心化自治组织(DAO)
+# DAO 智能合约系统
 
-## 项目概述
+## 目录
 
-基于智能合约的去中心化投资基金，允许用户通过存入加密资产获得治理代币，共同参与投资决策和收益分配。系统包含资金池管理、多签钱包、治理系统等核心模块。
+- [概述](#概述)
+- [核心功能](#核心功能)
+- [合约架构](#合约架构)
+- [部署](#部署)
+- [使用场景](#使用场景)
+- [安全考虑](#安全考虑)
 
-# 去中心化自治组织(DAO)
+## 概述
 
-## 架构概述
+本项目实现了一个完整的 DAO (去中心化自治组织) 治理系统，包括投票、提案、资金管理等核心功能。系统采用模块化设计，确保了安全性和可扩展性。
 
-本 DAO 项目采用模块化设计，主要包含以下核心组件：
+## 核心功能
 
-### 1. 访问控制 (AccessControl.sol)
+- 提案创建和投票
+- 多签名钱包管理
+- 资金池管理
+- 权限控制
+- 投资策略执行
+- 收益分配
 
-- 基于默克尔树的白名单系统
-- 分级权限控制(Tier 1-4)
-- 用户限额管理
-- 紧急暂停机制
+## 合约架构
 
-### 2. 资金库 (Vault.sol)
+- `Governance.sol`: 治理核心合约
+- `MultiSig.sol`: 多签名钱包合约
+- `Vault.sol`: 资金池合约
+- `Strategy.sol`: 投资策略合约
+- `AccessControl.sol`: 权限控制合约
+- `ChainlinkPriceFeed.sol`: 价格预言机合约
+- `ProxyAdmin.sol`: 代理管理合约
 
-- ERC20 代币管理
-- 存取款业务逻辑
-- 收益分配系统
-- 费用管理
-- 与 Chainlink 预言机集成的价格发现
-
-### 3. 治理系统 (Governance.sol)
-
-- 提案创建与投票
-- 时间锁定机制
-- 委托投票
-- 紧急取消机制
-
-### 4. 多签钱包 (MultiSig.sol)
-
-- 交易提交与确认
-- 角色分级(SUPER_ADMIN/ADMIN/BASIC)
-- 紧急处理机制
-- 交易执行超时保护
-
-### 5. 投资策略 (Strategy.sol)
-
-- 自动化投资逻辑
-- 资产再平衡
-- 收益收割
-- 风险控制
-
-### 2. 部署流程
+### 部署
 
 ```sh
 pnpm deploy:dao
 ```
 
-## 使用场景示例
+## 使用场景
 
-### 场景1: 创建投资提案
+### 场景一：创建和执行提案
 
-```javascript
-// 1. 准备提案数据
-const targets = [strategy.address]
-const values = [0]
-const calldatas = [strategy.interface.encodeFunctionData('invest', [token.address, ethers.utils.parseEther('1000')])]
-const description = 'Invest 1000 USDC in Lending Protocol'
+**目标**: 通过 DAO 投票决定是否将资金投资到新的策略中
 
-// 2. 提交提案
-await governance.propose(targets, values, calldatas, description)
-const proposalId = await governance.proposalCount()
-
-// 3. 等待投票延迟
-await network.provider.send('evm_increaseTime', [votingDelay])
-
-// 4. 投票
-await governance.castVote(proposalId, true)
-
-// 5. 等待投票期结束
-await network.provider.send('evm_increaseTime', [votingPeriod])
-
-// 6. 执行提案
-await governance.execute(proposalId)
-```
-
-### 场景2: 多签钱包资金转移
-
-```javascript
-// 1. 提交转账交易
-const to = '0x...'
-const value = ethers.utils.parseEther('10')
-const data = '0x'
-await multiSig.submitTransaction(to, value, data)
-const txId = (await multiSig.transactionCount()) - 1
-
-// 2. 其他签名者确认
-await multiSig.connect(signer2).confirmTransaction(txId)
-await multiSig.connect(signer3).confirmTransaction(txId)
-
-// 3. 达到阈值后自动执行
-// 或手动执行
-await multiSig.executeTransaction(txId)
-```
-
-### 场景3: 紧急情况处理
-
-```javascript
-// 1. 暂停所有操作
-await vault.pause()
-
-// 2. 紧急提款
-await vault.emergencyWithdraw()
-
-// 3. 取消待执行的提案
-await governance.cancelProposal(proposalId)
-
-// 4. 恢复操作
-await vault.unpause()
-```
-
-## 安全机制
-
-1. 时间锁定
-
-- 提案执行延迟: 2-14 天
-- 多签交易确认等待期: 24 小时
-- 升级冷却期: 48 小时
-
-2. 权限分级
+1. **准备工作**
 
 ```solidity
-enum Role {
-  BASIC,
-  ADMIN,
-  SUPER_ADMIN
-}
+// 部署所需合约
+Governance governance = new Governance();
+Vault vault = new Vault();
+Strategy strategy = new Strategy();
+
+// 初始化治理代币
+address governanceToken = 0x...;
+governance.initialize(governanceToken, ...);
 ```
 
-3. 交易限额
+2. **创建提案**
 
 ```solidity
-mapping(uint256 => uint256) public tierLimits;
+// 准备提案数据
+address[] memory targets = new address[](1);
+targets[0] = address(strategy);
+uint256[] memory values = new uint256[](1);
+values[0] = 0;
+bytes[] memory calldatas = new bytes[](1);
+calldatas[0] = abi.encodeWithSignature("invest(address,uint256)", token, amount);
+
+// 创建提案
+uint256 proposalId = governance.propose(
+    targets,
+    values,
+    calldatas,
+    "Invest in new yield farming strategy"
+);
 ```
 
-4. 多重签名
-
-- 交易执行需要达到指定确认数
-- 重要操作需要高级角色确认
-
-5. 紧急暂停
-
-- 所有合约都继承 Pausable
-- 可以快速冻结危险操作
-
-## 接口规范
-
-### IPriceFeed
-
-价格预言机接口
+3. **投票过程**
 
 ```solidity
-interface IPriceFeed {
-  function getPrice(address token) external view returns (uint256);
-  function addPriceFeed(address token, address feed) external;
-}
+// 等待投票延迟期
+await governance.state(proposalId) == ProposalState.Active;
+
+// 投票支持
+governance.castVote(proposalId, true);
+
+// 或者使用带签名的投票
+bytes32 digest = ...;  // 计算投票消息的哈希
+(uint8 v, bytes32 r, bytes32 s) = sign(digest);
+governance.castVoteBySig(proposalId, true, v, r, s);
 ```
 
-### IStrategy
-
-投资策略接口
+4. **执行提案**
 
 ```solidity
-interface IStrategy {
-  function invest(address token, uint256 amount) external returns (bool);
-  function withdraw(address token, uint256 amount) external returns (bool);
-  function harvest() external returns (uint256 totalValue);
-}
+// 检查提案是否通过
+require(governance.state(proposalId) == ProposalState.Succeeded);
+
+// 将提案加入队列
+governance.queue(proposalId);
+
+// 等待时间锁过期后执行
+await block.timestamp >= proposal.eta;
+governance.execute(proposalId);
 ```
 
-## 测试用例
+### 场景二：多签名资金管理
 
-```typescript
-describe("Vault", () => {
-  it("should deposit tokens and mint shares", async () => {
-    const amount = ethers.utils.parseEther("100");
-    await token.approve(vault.address, amount);
-    await vault.depositToken(token.address, amount);
+**目标**: 通过多签钱包安全管理 DAO 资金
 
-    const shares = await vault.balanceOf(user.address);
-    expect(shares).to.gt(0);
-  });
-});
-
-describe("Governance", () => {
-  it("should execute successful proposal", async () => {
-    // 创建提案
-    await governance.propose(...);
-
-    // 投票
-    await governance.castVote(proposalId, true);
-
-    // 检查状态
-    expect(await governance.state(proposalId)).to.equal(4); // Executed
-  });
-});
-```
-
-## 升级机制
-
-合约采用 UUPS 代理模式，支持安全升级：
+1. **初始化多签钱包**
 
 ```solidity
-function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
-  // 验证新实现合约
-  if (!_isContract(newImplementation)) revert InvalidImplementation();
-  // 其他验证...
-}
+// 设置多签持有人和阈值
+address[] memory owners = new address[](3);
+owners[0] = owner1;
+owners[1] = owner2;
+owners[2] = owner3;
+uint256 threshold = 2;  // 需要2/3签名
+uint256 delay = 1 days;
+
+MultiSig multiSig = new MultiSig(owners, threshold, delay);
 ```
+
+2. **提交交易**
+
+```solidity
+// 准备交易数据
+address to = recipient;
+uint256 value = 1 ether;
+bytes memory data = "";
+uint256 gasLimit = 21000;
+
+// 提交交易请求
+uint256 txId = multiSig.submitTransaction(to, value, data, gasLimit);
+```
+
+3. **确认交易**
+
+```solidity
+// 其他持有人确认
+multiSig.confirmTransaction(txId);
+
+// 检查是否可以执行
+(bool executable, string memory reason) = multiSig.isTransactionExecutable(txId);
+require(executable, reason);
+```
+
+4. **执行交易**
+
+```solidity
+// 达到阈值后执行
+multiSig.executeTransaction(txId);
+```
+
+### 场景三：资金池管理与收益分配
+
+**目标**: 管理用户存款并分配收益
+
+1. **初始化资金池**
+
+```solidity
+// 设置支持的代币
+address[] memory supportedTokens = new address[](2);
+supportedTokens[0] = USDC;
+supportedTokens[1] = USDT;
+
+// 初始化 Vault
+vault.initialize(
+    "DAO Vault",
+    "vDAO",
+    supportedTokens,
+    accessControl
+);
+```
+
+2. **用户存款**
+
+```solidity
+// 用户存入 USDC
+IERC20(USDC).approve(address(vault), amount);
+vault.deposit(USDC, amount);
+```
+
+3. **执行投资策略**
+
+```solidity
+// 通过策略合约进行投资
+strategy.invest(USDC, investAmount);
+
+// 收获收益
+strategy.harvest();
+```
+
+4. **分配收益**
+
+```solidity
+// 更新收益池
+vault.updateRewards(newRewards);
+
+// 用户领取收益
+vault.claimRewards();
+```
+
+### 场景四：权限管理
+
+**目标**: 管理用户权限和白名单
+
+1. **设置权限控制**
+
+```solidity
+// 初始化权限等级
+bytes32 merkleRoot = 0x...;  // 白名单默克尔树根
+AccessControl access = new AccessControl();
+access.updateMerkleRoot(merkleRoot);
+```
+
+2. **添加用户到白名单**
+
+```solidity
+// 准备证明
+bytes32[] memory proof = ...;
+uint256 tier = 2;  // 用户等级
+
+// 添加用户
+access.addToWhitelist(user, tier, proof);
+```
+
+3. **设置限额**
+
+```solidity
+// 为不同等级设置限额
+access.updateTierLimit(1, 1000 ether);
+access.updateTierLimit(2, 5000 ether);
+```
+
+4. **权限检查**
+
+```solidity
+// 检查用户权限
+require(access.isWhitelisted(user), "Not whitelisted");
+require(access.checkLimit(user, amount), "Exceeds limit");
+```
+
+## 安全考虑
+
+- 使用时间锁保护重要操作
+- 实施多签名机制
+- 限制单笔交易金额
+- 防重入保护
+- 权限分级管理
+- 紧急暂停机制
