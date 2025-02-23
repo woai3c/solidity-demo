@@ -133,15 +133,15 @@ async function deployDAOContracts(config: DeployConfig) {
     },
     Vault: {
       address: vaultAddress,
-      args: [], // 代理合约不需要构造参数
+      args: [config.name, config.symbol, config.supportedTokens, accessControlAddress], // 代理合约不需要构造参数
     },
     Strategy: {
       address: strategyAddress,
-      args: [],
+      args: [vaultAddress, config.router], // 确保提供正确的构造参数
     },
     Governance: {
       address: governanceAddress,
-      args: [],
+      args: [vaultAddress, config.votingDelay, config.votingPeriod, config.quorumVotes], // 确保提供正确的构造参数
     },
   })
 
