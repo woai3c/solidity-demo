@@ -37,6 +37,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
   error UrgentVotesFailed(uint256 current, uint256 required);
   error NotUrgent();
   error InvalidRole();
+  error NotAContract(address target);
 
   // 角色枚举
   enum Role {
@@ -68,7 +69,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
 
   // 状态变量
   uint256 public immutable CHAIN_ID;
-  uint256 public threshold;
+  uint256 public threshold; // 最小确认数
   uint256 public delay;
   uint256 public nonce;
   EnumerableSet.AddressSet private owners;
@@ -80,6 +81,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
   uint256 public immutable deployTime;
   mapping(uint256 => mapping(address => bool)) public urgentVotings;
   mapping(address => uint256) public lastOperationTime;
+  mapping(address => uint256) public nonces;
 
   // 事件 (添加更多信息)
   event OwnerAdded(address indexed owner, Role role);
@@ -162,9 +164,9 @@ contract MultiSig is ReentrancyGuard, Pausable {
   ) external onlyOwner whenNotPaused returns (uint256 txId) {
     if (_gasLimit > MAX_GAS) revert InvalidGasLimit(_gasLimit, MAX_GAS);
 
-    txId = transactionCount;
-    bytes32 txHash = keccak256(abi.encode(_to, _value, _data, nonce++, CHAIN_ID));
+    bytes32 txHash = keccak256(abi.encode(_to, _value, _data, nonces[msg.sender]++, CHAIN_ID));
 
+    txId = transactionCount;
     transactions[txId] = Transaction({
       to: _to,
       value: _value,
@@ -221,11 +223,22 @@ contract MultiSig is ReentrancyGuard, Pausable {
 
     transaction.executed = true;
 
-    // 执行交易
     if (transaction.data.length > 0) {
+      // 如果有 data，检查目标地址是否是合约
+      uint256 size;
+      address to = transaction.to;
+
+      assembly {
+        size := extcodesize(to)
+      }
+
+      if (size == 0) revert NotAContract(to);
+
+      // transaction.data 决定了执行什么函数，data 包含了函数选择器(4字节)和编码后的参数，这里 to 必须是合约地址
       (bool success, ) = transaction.to.call{ value: transaction.value, gas: transaction.gasLimit }(transaction.data);
       if (!success) revert ExecutionFailed();
     } else {
+      // 如果 transaction.data 为空，则进行 ETH 转账。这里的 to 可能是合约地址也可能是钱包地址
       (bool success, ) = transaction.to.call{ value: transaction.value, gas: transaction.gasLimit }('');
       if (!success) revert ExecutionFailed();
     }
@@ -257,10 +270,9 @@ contract MultiSig is ReentrancyGuard, Pausable {
     }
   }
 
-  // 修改: 紧急执行功能
   function markTransactionUrgent(
     uint256 _txId
-  ) external onlyRole(Role.ADMIN) txExists(_txId) notExecuted(_txId) whenNotPaused {
+  ) external onlyRole(Role.SUPER_ADMIN) txExists(_txId) notExecuted(_txId) whenNotPaused {
     Transaction storage transaction = transactions[_txId];
     if (urgentVotings[_txId][msg.sender]) revert AlreadyConfirmed();
 
@@ -274,10 +286,9 @@ contract MultiSig is ReentrancyGuard, Pausable {
     emit UrgentTransactionVoted(_txId, msg.sender, transaction.urgentVotes);
   }
 
-  // 修改: 紧急执行交易
   function executeUrgentTransaction(
     uint256 _txId
-  ) external nonReentrant onlyRole(Role.ADMIN) txExists(_txId) notExecuted(_txId) {
+  ) external nonReentrant onlyRole(Role.SUPER_ADMIN) txExists(_txId) notExecuted(_txId) {
     Transaction storage transaction = transactions[_txId];
     if (!transaction.isUrgent) revert NotUrgent();
 
@@ -300,7 +311,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
     emit TransactionExecuted(_txId, transaction.to, transaction.value, transaction.data, block.timestamp);
   }
 
-  // 修改: 估算交易 gas
+  // 估算交易 gas
   function estimateTransactionGas(uint256 _txId) external view txExists(_txId) notExecuted(_txId) returns (uint256) {
     Transaction storage transaction = transactions[_txId];
 
