@@ -56,12 +56,11 @@ async function deployDAOContracts(config: DeployConfig) {
   // 3. 部署 Vault (可升级)
   console.log('Deploying Vault...')
   const Vault = await ethers.getContractFactory('Vault')
-  const vault = (await upgrades.deployProxy(Vault, [
-    config.name,
-    config.symbol,
-    config.supportedTokens,
-    accessControlAddress,
-  ])) as unknown as IVault
+  const vault = (await upgrades.deployProxy(
+    Vault,
+    [config.name, config.symbol, config.supportedTokens, accessControlAddress],
+    { unsafeAllow: ['constructor'] },
+  )) as unknown as IVault
 
   await vault.waitForDeployment()
   const vaultAddress = await vault.getAddress()
@@ -70,22 +69,27 @@ async function deployDAOContracts(config: DeployConfig) {
   // 4. 部署 Strategy (可升级)
   console.log('Deploying Strategy...')
   const Strategy = await ethers.getContractFactory('Strategy')
-  const strategy = await upgrades.deployProxy(Strategy, [vaultAddress, config.router])
+  const strategy = await upgrades.deployProxy(Strategy, [vaultAddress, config.router, multiSigAddress], {
+    unsafeAllow: ['constructor'],
+  })
+
   await strategy.waitForDeployment()
   const strategyAddress = await strategy.getAddress()
+  console.log('Strategy proxy deployed to:', strategyAddress)
 
   // 5. 部署 Governance (可升级)
   console.log('Deploying Governance...')
   const Governance = await ethers.getContractFactory('Governance')
-  const governance = (await upgrades.deployProxy(Governance, [
-    vaultAddress,
-    config.votingDelay,
-    config.votingPeriod,
-    config.quorumVotes,
-  ])) as unknown as IGovernance
+  const governance = (await upgrades.deployProxy(
+    Governance,
+    [vaultAddress, strategyAddress, config.votingDelay, config.votingPeriod, config.quorumVotes],
+    { unsafeAllow: ['constructor'] },
+  )) as unknown as IGovernance
 
   await governance.waitForDeployment()
   const governanceAddress = await governance.getAddress()
+  await strategy.setGovernance(governanceAddress)
+  console.log('Governance proxy deployed to:', governanceAddress)
 
   // 6. 设置合约间的权限关系
   console.log('Setting up contract relationships...')

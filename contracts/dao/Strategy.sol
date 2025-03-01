@@ -97,6 +97,7 @@ contract Strategy is
     __ReentrancyGuard_init();
     __Pausable_init();
     __UUPSUpgradeable_init();
+    __RoleControl_init();
 
     if (_vault == address(0) || _router == address(0) || _governance == address(0)) revert ZeroAddress();
     vault = _vault;

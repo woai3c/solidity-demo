@@ -155,13 +155,14 @@ contract Vault is
     string memory name,
     string memory symbol,
     address[] memory supportedTokens,
-    address _accessControl // 添加参数
+    address _accessControl
   ) external initializer {
     __ERC20_init(name, symbol);
     __ReentrancyGuard_init();
     __Pausable_init();
-    __Ownable_init(msg.sender); // Pass msg.sender as the initial owner
+    __Ownable_init(msg.sender);
     __UUPSUpgradeable_init();
+    __RoleControl_init();
 
     if (_accessControl == address(0)) revert ZeroAddress();
     accessControl = IAccessControl(_accessControl);
@@ -187,9 +188,6 @@ contract Vault is
         ++i;
       }
     }
-
-    // 设置调用者为超级管理员
-    userRoles[msg.sender] = Role.SUPER_ADMIN;
   }
 
   // Helper function to add token

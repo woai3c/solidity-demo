@@ -152,7 +152,7 @@ contract Governance is
 
   function initialize(
     address _token,
-    address _strategy, // 添加 strategy 参数
+    address _strategy,
     uint256 _votingDelay,
     uint256 _votingPeriod,
     uint256 _quorumVotes
@@ -162,6 +162,7 @@ contract Governance is
     __Pausable_init();
     __Ownable_init(msg.sender);
     __UUPSUpgradeable_init();
+    __RoleControl_init();
 
     if (_token == address(0) || _strategy == address(0)) revert ZeroAddress();
     governanceToken = IERC20(_token);

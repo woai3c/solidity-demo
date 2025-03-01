@@ -20,9 +20,29 @@ abstract contract RoleControl {
   event RoleGranted(address indexed account, Role indexed role);
   event RoleRevoked(address indexed account, Role indexed role);
 
-  // 构造函数
+  // 跟踪合约是否已初始化
+  bool private _roleControlInitialized;
+
+  // 构造函数 - 用于非可升级合约
   constructor() {
-    userRoles[msg.sender] = Role.SUPER_ADMIN;
+    _initializeRoleControl();
+  }
+
+  // 初始化函数 - 用于可升级合约
+  function __RoleControl_init() internal {
+    __RoleControl_init_unchained();
+  }
+
+  function __RoleControl_init_unchained() internal {
+    _initializeRoleControl();
+  }
+
+  // 内部初始化逻辑 - 被构造函数和初始化函数共用
+  function _initializeRoleControl() private {
+    if (!_roleControlInitialized) {
+      userRoles[msg.sender] = Role.SUPER_ADMIN;
+      _roleControlInitialized = true;
+    }
   }
 
   // 修改器
