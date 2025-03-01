@@ -3,9 +3,11 @@ pragma solidity ^0.8.22;
 
 import { AggregatorV3Interface } from '@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol';
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
-import { IPriceFeed } from './types.sol';
+import { IPriceFeed } from '../types.sol';
+import { RoleControl } from './RoleControl.sol';
+import { Role } from '../types.sol';
 
-contract ChainlinkPriceFeed is IPriceFeed, Ownable {
+contract ChainlinkPriceFeed is IPriceFeed, Ownable, RoleControl {
   // 自定义错误
   error PriceFeedNotFound();
   error StalePrice();
@@ -40,7 +42,7 @@ contract ChainlinkPriceFeed is IPriceFeed, Ownable {
   }
 
   // 添加或更新价格源
-  function addPriceFeed(address token, address feed) external onlyOwner {
+  function addPriceFeed(address token, address feed) external onlyRole(Role.ADMIN) {
     if (feed == address(0)) revert InvalidFeedAddress();
     priceFeeds[token] = feed;
     emit PriceFeedUpdated(token, feed);

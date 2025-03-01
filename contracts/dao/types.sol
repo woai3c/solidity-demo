@@ -52,3 +52,12 @@ interface IAccessControl {
   // 获取等级对应的限额
   function tierLimits(uint256 tier) external view returns (uint256);
 }
+
+// 通用角色定义
+enum Role {
+  NONE, // 0: 无角色
+  BASIC, // 1: 基础角色
+  OPERATOR, // 2: 操作员
+  ADMIN, // 3: 管理员
+  SUPER_ADMIN // 4: 超级管理员
+}

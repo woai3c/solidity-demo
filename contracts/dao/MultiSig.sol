@@ -6,12 +6,13 @@ import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-
+import { Role } from './types.sol';
+import { RoleControl } from './utils/RoleControl.sol';
 /**
  * @title MultiSig
  * @dev Enhanced version of the multi-signature wallet with additional security features
  */
-contract MultiSig is ReentrancyGuard, Pausable {
+contract MultiSig is ReentrancyGuard, Pausable, RoleControl {
   using EnumerableSet for EnumerableSet.AddressSet;
   using SafeERC20 for IERC20;
 
@@ -36,29 +37,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
   error TransactionExpired(uint256 deadline);
   error UrgentVotesFailed(uint256 current, uint256 required);
   error NotUrgent();
-  error InvalidRole();
   error NotAContract(address target);
-
-  // 角色枚举
-  enum Role {
-    BASIC,
-    ADMIN,
-    SUPER_ADMIN
-  }
-
-  // 交易结构
-  struct Transaction {
-    address to;
-    uint256 value;
-    bytes data;
-    bool executed;
-    uint256 numConfirmations;
-    uint256 queuedTime;
-    bytes32 txHash;
-    uint256 gasLimit;
-    bool isUrgent;
-    uint256 urgentVotes;
-  }
 
   // 常量
   uint256 public constant MIN_DELAY = 1 hours;
@@ -76,7 +55,6 @@ contract MultiSig is ReentrancyGuard, Pausable {
   mapping(uint256 => Transaction) public transactions;
   mapping(uint256 => mapping(address => bool)) public isConfirmed;
   mapping(bytes32 => bool) public queuedTransactions;
-  mapping(address => Role) public ownerRoles;
   uint256 public transactionCount;
   uint256 public immutable deployTime;
   mapping(uint256 => mapping(address => bool)) public urgentVotings;
@@ -106,6 +84,20 @@ contract MultiSig is ReentrancyGuard, Pausable {
   event TokenApproved(address indexed token, address indexed spender, uint256 amount);
   event UrgentTransactionVoted(uint256 indexed txId, address indexed owner, uint256 votes);
 
+  // Transaction 结构定义
+  struct Transaction {
+    address to;
+    uint256 value;
+    bytes data;
+    bool executed;
+    uint256 numConfirmations;
+    uint256 queuedTime;
+    bytes32 txHash;
+    uint256 gasLimit;
+    bool isUrgent;
+    uint256 urgentVotes;
+  }
+
   constructor(address[] memory _owners, uint256 _threshold, uint256 _delay) {
     if (_owners.length == 0) revert InvalidOwner();
     if (_threshold == 0 || _threshold > _owners.length) revert InvalidThreshold();
@@ -118,7 +110,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
       if (owner == address(0)) revert InvalidOwner();
       if (owners.contains(owner)) revert OwnerAlreadyExists();
       owners.add(owner);
-      ownerRoles[owner] = i == 0 ? Role.SUPER_ADMIN : Role.BASIC;
+      userRoles[owner] = i == 0 ? Role.SUPER_ADMIN : Role.BASIC;
       unchecked {
         ++i;
       }
@@ -132,11 +124,6 @@ contract MultiSig is ReentrancyGuard, Pausable {
   // 修饰器
   modifier onlyOwner() {
     if (!owners.contains(msg.sender)) revert InvalidOwner();
-    _;
-  }
-
-  modifier onlyRole(Role role) {
-    if (ownerRoles[msg.sender] < role) revert InvalidRole();
     _;
   }
 
@@ -399,8 +386,8 @@ contract MultiSig is ReentrancyGuard, Pausable {
 
     owners.remove(_from);
     owners.add(_to);
-    ownerRoles[_to] = _role;
-    delete ownerRoles[_from];
+    userRoles[_to] = _role;
+    delete userRoles[_from];
 
     emit OwnerRemoved(_from);
     emit OwnerAdded(_to, _role);
@@ -501,7 +488,7 @@ contract MultiSig is ReentrancyGuard, Pausable {
     if (owners.contains(_owner)) revert OwnerAlreadyExists();
 
     owners.add(_owner);
-    ownerRoles[_owner] = Role.BASIC;
+    userRoles[_owner] = Role.BASIC;
     emit OwnerAdded(_owner, Role.BASIC);
   }
 

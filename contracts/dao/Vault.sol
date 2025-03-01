@@ -12,8 +12,10 @@ import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20Metadata } from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import { IPriceFeed } from './types.sol';
-import { ChainlinkPriceFeed } from './ChainlinkPriceFeed.sol';
+import { ChainlinkPriceFeed } from './utils/ChainlinkPriceFeed.sol';
 import { IAccessControl } from './types.sol';
+import { Role } from './types.sol';
+import { RoleControl } from './utils/RoleControl.sol';
 
 contract Vault is
   Initializable,
@@ -21,7 +23,8 @@ contract Vault is
   ReentrancyGuardUpgradeable,
   PausableUpgradeable,
   OwnableUpgradeable,
-  UUPSUpgradeable
+  UUPSUpgradeable,
+  RoleControl
 {
   using SafeERC20 for IERC20;
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -41,9 +44,9 @@ contract Vault is
   error InvalidPrice();
   error OperationFailed();
   error InvalidAccessControl();
-  error UnauthorizedAccess();
   error InvalidGovernance();
   error InvalidStrategy();
+  error InvalidInput();
 
   // 价格预言机
   IPriceFeed public priceFeed;
@@ -160,7 +163,7 @@ contract Vault is
     __Ownable_init(msg.sender); // Pass msg.sender as the initial owner
     __UUPSUpgradeable_init();
 
-    if (_accessControl == address(0)) revert InvalidAccessControl();
+    if (_accessControl == address(0)) revert ZeroAddress();
     accessControl = IAccessControl(_accessControl);
 
     // Initialize other state variables
@@ -184,6 +187,9 @@ contract Vault is
         ++i;
       }
     }
+
+    // 设置调用者为超级管理员
+    userRoles[msg.sender] = Role.SUPER_ADMIN;
   }
 
   // Helper function to add token
@@ -201,7 +207,7 @@ contract Vault is
   // =========================
 
   // 存入ETH
-  function deposit() external payable nonReentrant whenNotPaused onlyWhitelisted checkLimit(msg.value) {
+  function deposit() external payable nonReentrant whenNotPaused checkLimit(msg.value) {
     if (msg.value < minimumDeposit) revert DepositTooLow();
     if (msg.value > maxDeposit) revert DepositTooHigh();
 
@@ -226,14 +232,10 @@ contract Vault is
   }
 
   // 存入ERC20代币
-  function depositToken(
-    address token,
-    uint256 amount
-  ) external nonReentrant whenNotPaused onlyWhitelisted checkLimit(amount) {
-    uint256 minDeposit = (minimunTokenDeposit * (10 ** tokenDecimals[token])) / 1e6;
-    if (amount < minDeposit) revert DepositTooLow();
-    if (amount > maxDeposit) revert DepositTooHigh();
+  function depositToken(address token, uint256 amount) external nonReentrant whenNotPaused checkLimit(amount) {
     if (!isSupportedToken(token)) revert TokenNotSupported();
+    if (amount < minimunTokenDeposit) revert DepositTooLow();
+    if (amount > maxDeposit) revert DepositTooHigh();
 
     uint256 fee = (amount * fees.depositFee) / 10000;
     uint256 amountAfterFee = amount - fee;
@@ -257,7 +259,8 @@ contract Vault is
 
   // 提取ETH
   function withdraw(uint256 shareAmount) external nonReentrant whenNotPaused {
-    if (balanceOf(msg.sender) < shareAmount) revert InsufficientShares();
+    if (shareAmount == 0) revert InvalidAmount();
+    if (shareAmount > balanceOf(msg.sender)) revert InsufficientShares();
 
     uint256 assets = calculateAssets(shareAmount);
     uint256 fee = (assets * fees.withdrawFee) / 10000;
@@ -277,7 +280,8 @@ contract Vault is
   // 提取ERC20代币
   function withdrawToken(address token, uint256 shareAmount) external nonReentrant whenNotPaused {
     if (!isSupportedToken(token)) revert TokenNotSupported();
-    if (balanceOf(msg.sender) < shareAmount) revert InsufficientShares();
+    if (shareAmount == 0) revert InvalidAmount();
+    if (shareAmount > balanceOf(msg.sender)) revert InsufficientShares();
 
     uint256 assets = calculateAssets(shareAmount);
     uint256 fee = (assets * fees.withdrawFee) / 10000;
@@ -346,7 +350,7 @@ contract Vault is
   // =========================
 
   // 添加支持的代币
-  function addSupportedToken(address token) external onlyOwner {
+  function addSupportedToken(address token) external onlyRole(Role.ADMIN) {
     if (token == address(0)) revert InvalidToken();
     if (isSupportedToken(token)) revert TokenAlreadySupported();
     if (supportedTokensSet.length() >= 50) revert MaxTokensReached();
@@ -359,7 +363,7 @@ contract Vault is
   }
 
   // 移除支持的代币
-  function removeSupportedToken(address token) external onlyOwner {
+  function removeSupportedToken(address token) external onlyRole(Role.ADMIN) {
     if (!isSupportedToken(token)) revert TokenNotSupported();
 
     supportedTokensSet.remove(token);
@@ -383,17 +387,17 @@ contract Vault is
   // =========================
 
   // 设置最小存款额
-  function setMinimumDeposit(uint256 _minimumDeposit) external onlyOwner {
+  function setMinimumDeposit(uint256 _minimumDeposit) external onlyRole(Role.ADMIN) {
     minimumDeposit = _minimumDeposit;
   }
 
   // 设置最大存款额
-  function setMaxDeposit(uint256 _maxDeposit) external onlyOwner {
+  function setMaxDeposit(uint256 _maxDeposit) external onlyRole(Role.ADMIN) {
     maxDeposit = _maxDeposit;
   }
 
   // 设置费用
-  function setFees(uint256 _depositFee, uint256 _withdrawFee, uint256 _managementFee) external onlyOwner {
+  function setFees(uint256 _depositFee, uint256 _withdrawFee, uint256 _managementFee) external onlyRole(Role.ADMIN) {
     if (_depositFee > 1000) revert InvalidAmount(); // 最大10%
     if (_withdrawFee > 1000) revert InvalidAmount();
     if (_managementFee > 500) revert InvalidAmount(); // 最大5%
@@ -405,7 +409,7 @@ contract Vault is
   }
 
   // 分配收益
-  function distributeProfit() external onlyOwner {
+  function distributeProfit() external onlyRole(Role.SUPER_ADMIN) {
     uint256 currentBalance = totalAssets;
     uint256 profit = currentBalance - totalSupply();
     if (profit <= 0) revert InvalidAmount();
@@ -439,7 +443,7 @@ contract Vault is
   }
 
   // 紧急提款（管理员功能）
-  function emergencyWithdraw() external onlyOwner whenPaused {
+  function emergencyWithdraw() external onlyRole(Role.SUPER_ADMIN) {
     // 提取ETH
     uint256 ethBalance = address(this).balance;
     if (ethBalance > 0) {

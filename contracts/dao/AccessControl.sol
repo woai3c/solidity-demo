@@ -5,8 +5,10 @@ import { MerkleProof } from '@openzeppelin/contracts/utils/cryptography/MerklePr
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
 import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import { Role } from './types.sol';
+import { RoleControl } from './utils/RoleControl.sol';
 
-contract AccessControl is Ownable, Pausable, ReentrancyGuard {
+contract AccessControl is Ownable, Pausable, ReentrancyGuard, RoleControl {
   // 错误定义
   error InvalidProof();
   error InvalidTier(uint256 tier);
@@ -52,14 +54,13 @@ contract AccessControl is Ownable, Pausable, ReentrancyGuard {
     return MerkleProof.verify(proof, merkleRoot, leaf);
   }
 
-  function updateUserTier(address user, uint256 newTier, bytes32[] calldata proof) external whenNotPaused nonReentrant {
-    // 验证新等级
+  function updateUserTier(
+    address user,
+    uint256 newTier,
+    bytes32[] calldata proof
+  ) external whenNotPaused nonReentrant onlyRole(Role.ADMIN) {
     if (newTier == 0 || newTier > MAX_TIER) revert InvalidTier(newTier);
-
-    // 验证冷却期
     if (block.timestamp < lastTierUpdate[user] + TIER_LOCK_PERIOD) revert TierLocked(user);
-
-    // 验证白名单证明
     if (!_verifyProof(proof, user)) revert InvalidProof();
 
     uint256 oldTier = userTier[user];
@@ -76,12 +77,12 @@ contract AccessControl is Ownable, Pausable, ReentrancyGuard {
   }
 
   // 管理功能
-  function updateMerkleRoot(bytes32 newRoot) external onlyOwner {
+  function updateMerkleRoot(bytes32 newRoot) external onlyRole(Role.SUPER_ADMIN) {
     merkleRoot = newRoot;
     emit WhitelistUpdated(newRoot, block.timestamp);
   }
 
-  function updateTierLimit(uint256 tier, uint256 newLimit) external onlyOwner {
+  function updateTierLimit(uint256 tier, uint256 newLimit) external onlyRole(Role.ADMIN) {
     if (tier == 0 || tier > MAX_TIER) revert InvalidTier(tier);
 
     uint256 oldLimit = tierLimits[tier];
@@ -90,7 +91,11 @@ contract AccessControl is Ownable, Pausable, ReentrancyGuard {
     emit TierLimitUpdated(tier, oldLimit, newLimit);
   }
 
-  function addToWhitelist(address user, uint256 tier, bytes32[] calldata proof) external whenNotPaused nonReentrant {
+  function addToWhitelist(
+    address user,
+    uint256 tier,
+    bytes32[] calldata proof
+  ) external whenNotPaused nonReentrant onlyRole(Role.ADMIN) {
     if (isWhitelisted[user]) revert AlreadyWhitelisted(user);
     if (whitelistCount >= MAX_WHITELIST_SIZE) revert ExceedsLimit(whitelistCount + 1, MAX_WHITELIST_SIZE);
     if (!_verifyProof(proof, user)) revert InvalidProof();
@@ -102,7 +107,7 @@ contract AccessControl is Ownable, Pausable, ReentrancyGuard {
     emit UserWhitelisted(user, tier);
   }
 
-  function removeFromWhitelist(address user) external onlyOwner {
+  function removeFromWhitelist(address user) external onlyRole(Role.ADMIN) {
     if (!isWhitelisted[user]) revert NotWhitelisted(user);
 
     isWhitelisted[user] = false;
@@ -119,11 +124,11 @@ contract AccessControl is Ownable, Pausable, ReentrancyGuard {
   }
 
   // 暂停功能
-  function pause() external onlyOwner {
+  function pause() external onlyRole(Role.SUPER_ADMIN) {
     _pause();
   }
 
-  function unpause() external onlyOwner {
+  function unpause() external onlyRole(Role.SUPER_ADMIN) {
     _unpause();
   }
 }

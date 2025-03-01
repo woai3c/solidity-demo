@@ -7,12 +7,13 @@ import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
 import { Address } from '@openzeppelin/contracts/utils/Address.sol';
-
+import { Role } from './types.sol';
+import { RoleControl } from './utils/RoleControl.sol';
 /**
  * @title ProxyAdmin
  * @dev 管理代理合约的升级和管理
  */
-contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
+contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable, RoleControl {
   using Address for address;
 
   // 错误定义
@@ -50,7 +51,7 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
     address proxy,
     address implementation,
     bytes calldata initData
-  ) external onlyOwner whenNotPaused nonReentrant {
+  ) external onlyRole(Role.ADMIN) whenNotPaused nonReentrant {
     if (implementation.code.length == 0) revert NotAContract(implementation);
     if (registeredProxies[proxy]) revert AlreadyInitialized(proxy);
 
@@ -66,7 +67,7 @@ contract ProxyAdmin is Ownable, ReentrancyGuard, Pausable {
     emit ProxyRegistered(proxy, implementation);
   }
 
-  function scheduleUpgrade(address proxy, address newImplementation) external onlyOwner whenNotPaused {
+  function scheduleUpgrade(address proxy, address newImplementation) external onlyRole(Role.ADMIN) whenNotPaused {
     if (!registeredProxies[proxy]) revert InvalidProxy(proxy);
     if (newImplementation.code.length == 0) revert NotAContract(newImplementation);
     if (implementations[proxy] == newImplementation) revert InvalidImplementation(newImplementation);

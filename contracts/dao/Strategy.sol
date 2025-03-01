@@ -10,13 +10,16 @@ import { OwnableUpgradeable } from '@openzeppelin/contracts-upgradeable/access/O
 import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
+import { Role } from './types.sol';
+import { RoleControl } from './utils/RoleControl.sol';
 
 contract Strategy is
   Initializable,
   OwnableUpgradeable,
   ReentrancyGuardUpgradeable,
   PausableUpgradeable,
-  UUPSUpgradeable
+  UUPSUpgradeable,
+  RoleControl
 {
   using SafeERC20 for IERC20;
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -32,6 +35,10 @@ contract Strategy is
   error PriceImpactTooHigh(uint256 impact, uint256 max);
   error OperationNotReady(bytes32 operationId, uint256 unlockTime);
   error ExceedsMaxInvestment();
+  error InvalidPercentage(uint256 provided, uint256 max);
+  error InvalidThreshold(uint256 provided, uint256 max);
+  error InvalidArrayLength();
+  error NotAuthorized();
 
   // 状态变量优化 - 使用紧凑存储
   struct PackedStrategy {
@@ -62,7 +69,7 @@ contract Strategy is
   event Invested(address indexed token, uint256 amount, uint256 indexed timestamp);
   event Withdrawn(address indexed token, uint256 amount, uint256 indexed timestamp);
   event RewardsHarvested(uint256 indexed totalValue, uint256 indexed timestamp);
-  event StrategyUpdated(address indexed token, uint256 indexed targetPercentage, uint256 indexed rebalanceThreshold);
+  event StrategyUpdated(address indexed token, uint256 targetPercentage, uint256 rebalanceThreshold, address swapPath);
   event EmergencyWithdraw(address indexed token, uint256 indexed amount, uint256 timestamp);
   event PriceImpactChecked(address indexed tokenIn, address indexed tokenOut, uint256 impact);
   event SwapExecuted(
@@ -73,20 +80,28 @@ contract Strategy is
     uint256 timestamp
   );
 
+  // 添加 governance 变量声明
+  address public governance;
+
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
     _disableInitializers();
   }
 
-  function initialize(address _vault, address _router) external initializer {
+  function initialize(
+    address _vault,
+    address _router,
+    address _governance // 添加 governance 参数
+  ) external initializer {
     __Ownable_init(msg.sender);
     __ReentrancyGuard_init();
     __Pausable_init();
     __UUPSUpgradeable_init();
 
-    if (_vault == address(0) || _router == address(0)) revert InvalidToken(address(0));
+    if (_vault == address(0) || _router == address(0) || _governance == address(0)) revert ZeroAddress();
     vault = _vault;
     router = IUniswapV2Router02(_router);
+    governance = _governance; // 初始化 governance
 
     // 将默认值设置移到此处
     slippageTolerance = 50;
@@ -179,45 +194,53 @@ contract Strategy is
   // 代币操作优化
   function _swapTokens(address tokenIn, address tokenOut, uint256 amount) internal returns (uint256 amountOut) {
     // 检查-效果-交互模式
+    // 1. 记录交换前的余额，用于后续验证
     uint256 balanceBefore = IERC20(tokenOut).balanceOf(address(this));
 
+    // 2. 构建交易路径
     address[] memory path = new address[](2);
-    path[0] = tokenIn;
-    path[1] = tokenOut;
+    path[0] = tokenIn; // 输入代币
+    path[1] = tokenOut; // 输出代币
 
-    // 获取预期输出金额
+    // 3. 获取预期输出金额
     uint256[] memory amounts = router.getAmountsOut(amount, path);
+    // amounts[0] 是输入金额
+    // amounts[1] 是预期输出金额
+
+    // 4. 计算最小接收量（考虑滑点）
+    // 例如：slippageTolerance = 50 表示 0.5% 的滑点
+    // 如果预期输出 100 个代币，那么最少接收 99.5 个
     uint256 minOut = (amounts[1] * (10000 - slippageTolerance)) / 10000;
 
-    // 检查价格影响
+    // 5. 检查价格影响
     uint256 impact = ((amount - amounts[1]) * 10000) / amount;
     if (impact > MAX_PRICE_IMPACT) {
       revert PriceImpactTooHigh(impact, MAX_PRICE_IMPACT);
     }
 
-    // 授权
+    // 6. 授权 Router 使用代币
     IERC20(tokenIn).forceApprove(address(router), amount);
 
-    // 执行交换
+    // 7. 执行交换
     router.swapExactTokensForTokens(
-      amount,
-      minOut,
-      path,
-      address(this),
-      block.number + 3 // 使用区块号替代时间戳
+      amount, // 输入数量
+      minOut, // 最小接收数量
+      path, // 交易路径
+      address(this), // 接收地址
+      block.number + 3 // 截止区块
     );
 
-    // 验证输出
+    // 8. 验证输出
     uint256 actualOutput = IERC20(tokenOut).balanceOf(address(this)) - balanceBefore;
     if (actualOutput < minOut) {
       revert SwapFailed(tokenIn, tokenOut, amount);
     }
 
+    // 9. 记录事件
     emit SwapExecuted(tokenIn, tokenOut, amount, actualOutput, block.timestamp);
     return actualOutput;
   }
 
-  // 紧急功能优化
   function emergencyWithdraw(address token) external onlyOwner whenPaused {
     if (token == address(0)) revert InvalidToken(token);
 
@@ -338,5 +361,103 @@ contract Strategy is
     if (totalValue == 0) return 0;
 
     return _calculatePercentage(_getTokenValue(token), totalValue);
+  }
+
+  // 内部函数：处理单个策略更新的核心逻辑
+  function _updateSingleStrategy(
+    address token,
+    uint256 targetPercentage,
+    uint256 rebalanceThreshold,
+    address swapPath
+  ) internal {
+    // 验证参数
+    if (targetPercentage > 10000) {
+      revert InvalidPercentage(targetPercentage, 10000);
+    }
+    if (rebalanceThreshold > 10000) {
+      revert InvalidThreshold(rebalanceThreshold, 10000);
+    }
+    if (!supportedTokens[token]) {
+      revert NotSupported(token);
+    }
+
+    // 更新策略
+    tokenStrategies[token] = PackedStrategy({
+      targetPercentage: uint128(targetPercentage),
+      rebalanceThreshold: uint64(rebalanceThreshold),
+      lastUpdateTime: uint64(block.timestamp),
+      swapPath: swapPath
+    });
+
+    // 触发事件
+    emit StrategyUpdated(token, targetPercentage, rebalanceThreshold, swapPath);
+
+    // 如果需要，执行再平衡
+    _rebalanceIfNeeded(token);
+  }
+
+  // 修改权限控制，只允许 Governance 调用
+  function updateStrategy(
+    address token,
+    uint256 targetPercentage,
+    uint256 rebalanceThreshold,
+    address swapPath
+  ) external onlyGovernance whenNotPaused {
+    _updateSingleStrategy(token, targetPercentage, rebalanceThreshold, swapPath);
+  }
+
+  // 批量更新策略
+  function updateStrategies(
+    address[] calldata tokens,
+    uint256[] calldata targetPercentages,
+    uint256[] calldata rebalanceThresholds,
+    address[] calldata swapPaths
+  ) external onlyGovernance whenNotPaused {
+    // 检查数组长度
+    if (
+      tokens.length != targetPercentages.length ||
+      tokens.length != rebalanceThresholds.length ||
+      tokens.length != swapPaths.length
+    ) {
+      revert InvalidArrayLength();
+    }
+
+    // 检查总百分比不超过 100%
+    uint256 totalPercentage;
+    for (uint256 i = 0; i < targetPercentages.length; i++) {
+      totalPercentage += targetPercentages[i];
+    }
+    if (totalPercentage > 10000) {
+      revert InvalidPercentage(totalPercentage, 10000);
+    }
+
+    // 批量更新
+    for (uint256 i = 0; i < tokens.length; i++) {
+      _updateSingleStrategy(tokens[i], targetPercentages[i], rebalanceThresholds[i], swapPaths[i]);
+    }
+  }
+
+  // 查看当前策略
+  function getStrategy(
+    address token
+  )
+    external
+    view
+    returns (uint256 targetPercentage, uint256 rebalanceThreshold, uint256 lastUpdateTime, address swapPath)
+  {
+    PackedStrategy memory strategy = tokenStrategies[token];
+    return (strategy.targetPercentage, strategy.rebalanceThreshold, strategy.lastUpdateTime, strategy.swapPath);
+  }
+
+  // 添加 onlyGovernance 修饰器
+  modifier onlyGovernance() {
+    if (msg.sender != governance) revert NotAuthorized();
+    _;
+  }
+
+  // 添加更新 governance 地址的函数
+  function setGovernance(address _governance) external onlyOwner {
+    require(_governance != address(0), 'Zero address');
+    governance = _governance;
   }
 }
