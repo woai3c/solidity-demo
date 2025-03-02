@@ -141,11 +141,11 @@ async function deployDAOContracts(config: DeployConfig) {
     },
     Strategy: {
       address: strategyAddress,
-      args: [vaultAddress, config.router], // 确保提供正确的构造参数
+      args: [vaultAddress, config.router, governanceAddress], // 确保提供正确的构造参数
     },
     Governance: {
       address: governanceAddress,
-      args: [vaultAddress, config.votingDelay, config.votingPeriod, config.quorumVotes], // 确保提供正确的构造参数
+      args: [vaultAddress, strategyAddress, config.votingDelay, config.votingPeriod, config.quorumVotes], // 确保提供正确的构造参数
     },
   })
 

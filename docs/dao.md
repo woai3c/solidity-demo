@@ -244,6 +244,95 @@ require(access.isWhitelisted(user), "Not whitelisted");
 require(access.checkLimit(user, amount), "Exceeds limit");
 ```
 
+### 场景五：合约升级流程
+
+**目标**: 安全地升级DAO系统中的可升级合约
+
+1. **部署新实现合约**
+
+```solidity
+// 部署新版本的Vault实现合约
+Vault vaultV2Implementation = new Vault();
+```
+
+2. **通过ProxyAdmin安排升级**
+
+```solidity
+// 安排对Vault代理的升级
+bytes32 upgradeId = keccak256(abi.encodePacked(vaultProxyAddress, vaultV2Implementation));
+proxyAdmin.scheduleUpgrade(vaultProxyAddress, vaultV2Implementation);
+```
+
+3. **等待时间锁过期**
+
+```solidity
+// 检查升级是否可执行
+(bool isRegistered, address currentImpl, uint256 unlockTime, bool canUpgrade) =
+    proxyAdmin.getUpgradeStatus(vaultProxyAddress);
+require(canUpgrade, "Upgrade not ready yet");
+```
+
+4. **执行升级**
+
+```solidity
+// 执行升级
+proxyAdmin.upgrade(vaultProxyAddress, vaultV2Implementation);
+
+// 验证升级结果
+address newImplementation = proxyAdmin.getImplementation(vaultProxyAddress);
+require(newImplementation == address(vaultV2Implementation), "Upgrade failed");
+```
+
+### 场景六：紧急操作流程
+
+**目标**: 在发生意外情况时保护DAO资产安全
+
+1. **暂停合约操作**
+
+```solidity
+// 检查权限
+require(vault.hasRole(msg.sender, Role.SUPER_ADMIN), "Not authorized");
+
+// 暂停Vault操作
+vault.pause();
+
+// 暂停Strategy操作
+strategy.pause();
+
+// 暂停Governance操作
+governance.pause();
+```
+
+2. **紧急取消危险提案**
+
+```solidity
+// 识别危险提案
+uint256 dangerousProposalId = 42;
+require(governance.state(dangerousProposalId) != ProposalState.Executed, "Already executed");
+
+// 紧急取消
+governance.emergencyCancelProposal(dangerousProposalId);
+```
+
+3. **紧急资金提取**
+
+```solidity
+// 从Strategy紧急提取所有资金到Vault
+strategy.emergencyWithdraw(token);
+
+// 从Vault紧急提取所有资金
+vault.emergencyWithdraw();
+```
+
+4. **恢复操作**
+
+```solidity
+// 解决问题后恢复操作
+vault.unpause();
+strategy.unpause();
+governance.unpause();
+```
+
 ## 安全考虑
 
 - 使用时间锁保护重要操作
