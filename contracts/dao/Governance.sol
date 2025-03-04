@@ -1,30 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import { EIP712Upgradeable } from '@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol';
+import { EIP712 } from '@openzeppelin/contracts/utils/cryptography/EIP712.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { ECDSA } from '@openzeppelin/contracts/utils/cryptography/ECDSA.sol'; // 使用非升级版本
-import { ReentrancyGuardUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
-import { PausableUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
-import { AccessControlUpgradeable } from '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
-import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
-import { OwnableUpgradeable } from '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import { ECDSA } from '@openzeppelin/contracts/utils/cryptography/ECDSA.sol';
+import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
+
+import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { RoleControl } from './utils/RoleControl.sol';
 import { Role } from './utils/RoleControl.sol';
-
 import { IStrategy } from './types.sol';
 
-contract Governance is
-  Initializable,
-  EIP712Upgradeable,
-  ReentrancyGuardUpgradeable,
-  PausableUpgradeable,
-  OwnableUpgradeable,
-  UUPSUpgradeable,
-  RoleControl
-{
+contract Governance is EIP712, ReentrancyGuard, Pausable, Ownable, RoleControl {
   using SafeERC20 for IERC20;
 
   // 错误定义优化 - 添加更多信息
@@ -145,34 +134,20 @@ contract Governance is
   // 添加 Strategy 合约的引用
   IStrategy public strategy;
 
-  /// @custom:oz-upgrades-unsafe-allow constructor
-  constructor() {
-    _disableInitializers();
-  }
-
-  function initialize(
+  constructor(
     address _token,
     address _strategy,
     uint256 _votingDelay,
     uint256 _votingPeriod,
     uint256 _quorumVotes
-  ) external initializer {
-    __EIP712_init('DAOGovernance', '1');
-    __ReentrancyGuard_init();
-    __Pausable_init();
-    __Ownable_init(msg.sender);
-    __UUPSUpgradeable_init();
-    __RoleControl_init();
-
+  ) EIP712('DAOGovernance', '1') Ownable(msg.sender) {
     if (_token == address(0) || _strategy == address(0)) revert ZeroAddress();
     governanceToken = IERC20(_token);
-    strategy = IStrategy(_strategy); // 初始化 strategy
+    strategy = IStrategy(_strategy);
     votingDelay = _votingDelay;
     votingPeriod = _votingPeriod;
     quorumVotes = _quorumVotes;
   }
-
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(Role.SUPER_ADMIN) {}
 
   // 内部函数：处理提案创建的核心逻辑
   function _createProposal(

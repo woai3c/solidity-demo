@@ -24,13 +24,14 @@
 
 ## 合约架构
 
-- `Governance.sol`: 治理核心合约
-- `MultiSig.sol`: 多签名钱包合约
-- `Vault.sol`: 资金池合约
-- `Strategy.sol`: 投资策略合约
-- `AccessControl.sol`: 权限控制合约
-- `ChainlinkPriceFeed.sol`: 价格预言机合约
-- `ProxyAdmin.sol`: 代理管理合约
+系统由以下核心合约组成：
+
+- `Governance.sol`: 治理核心合约，负责提案的创建、投票和执行
+- `MultiSig.sol`: 多签名钱包合约，用于安全管理 DAO 资金
+- `Vault.sol`: 资金池合约，管理用户存款和收益分配
+- `Strategy.sol`: 投资策略合约，执行具体的投资操作
+- `CustomAccessControl.sol`: 权限控制合约，管理用户权限和白名单
+- `types.sol`: 合约类型定义和接口
 
 ### 部署
 
@@ -48,13 +49,13 @@ pnpm deploy:dao
 
 ```solidity
 // 部署所需合约
-Governance governance = new Governance();
-Vault vault = new Vault();
-Strategy strategy = new Strategy();
-
-// 初始化治理代币
-address governanceToken = 0x...;
-governance.initialize(governanceToken, ...);
+Governance governance = new Governance(
+    vaultAddress,
+    strategyAddress,
+    votingDelay,
+    votingPeriod,
+    quorumVotes
+);
 ```
 
 2. **创建提案**
@@ -162,13 +163,8 @@ multiSig.executeTransaction(txId);
 1. **初始化资金池**
 
 ```solidity
-// 设置支持的代币
-address[] memory supportedTokens = new address[](2);
-supportedTokens[0] = USDC;
-supportedTokens[1] = USDT;
-
 // 初始化 Vault
-vault.initialize(
+Vault vault = new Vault(
     "DAO Vault",
     "vDAO",
     supportedTokens,
@@ -211,10 +207,9 @@ vault.claimRewards();
 1. **设置权限控制**
 
 ```solidity
-// 初始化权限等级
+// 初始化权限控制
 bytes32 merkleRoot = 0x...;  // 白名单默克尔树根
-AccessControl access = new AccessControl();
-access.updateMerkleRoot(merkleRoot);
+AccessControl access = new AccessControl(merkleRoot);
 ```
 
 2. **添加用户到白名单**
@@ -244,46 +239,7 @@ require(access.isWhitelisted(user), "Not whitelisted");
 require(access.checkLimit(user, amount), "Exceeds limit");
 ```
 
-### 场景五：合约升级流程
-
-**目标**: 安全地升级DAO系统中的可升级合约
-
-1. **部署新实现合约**
-
-```solidity
-// 部署新版本的Vault实现合约
-Vault vaultV2Implementation = new Vault();
-```
-
-2. **通过ProxyAdmin安排升级**
-
-```solidity
-// 安排对Vault代理的升级
-bytes32 upgradeId = keccak256(abi.encodePacked(vaultProxyAddress, vaultV2Implementation));
-proxyAdmin.scheduleUpgrade(vaultProxyAddress, vaultV2Implementation);
-```
-
-3. **等待时间锁过期**
-
-```solidity
-// 检查升级是否可执行
-(bool isRegistered, address currentImpl, uint256 unlockTime, bool canUpgrade) =
-    proxyAdmin.getUpgradeStatus(vaultProxyAddress);
-require(canUpgrade, "Upgrade not ready yet");
-```
-
-4. **执行升级**
-
-```solidity
-// 执行升级
-proxyAdmin.upgrade(vaultProxyAddress, vaultV2Implementation);
-
-// 验证升级结果
-address newImplementation = proxyAdmin.getImplementation(vaultProxyAddress);
-require(newImplementation == address(vaultV2Implementation), "Upgrade failed");
-```
-
-### 场景六：紧急操作流程
+### 场景五：紧急操作流程
 
 **目标**: 在发生意外情况时保护DAO资产安全
 
@@ -291,7 +247,7 @@ require(newImplementation == address(vaultV2Implementation), "Upgrade failed");
 
 ```solidity
 // 检查权限
-require(vault.hasRole(msg.sender, Role.SUPER_ADMIN), "Not authorized");
+require(msg.sender == multiSig, "Not authorized");
 
 // 暂停Vault操作
 vault.pause();

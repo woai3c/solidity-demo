@@ -1,7 +1,6 @@
-import { ethers, run, upgrades } from 'hardhat'
+import { ethers, run } from 'hardhat'
 import { writeFileSync } from 'fs'
 import { delay } from './utils/utils'
-import type { IGovernance, IVault } from './types'
 import { generateMerkleRoot } from './utils/generateMerkleRoot'
 
 export interface DeployConfig {
@@ -21,93 +20,81 @@ export interface DeployConfig {
   signers: string[]
   threshold: number
   delay: number
-  // ProxyAdmin 的时间锁定期，可选
-  adminDelay?: number
 }
 
 async function deployDAOContracts(config: DeployConfig) {
   const [deployer] = await ethers.getSigners()
   console.log('Deploying DAO contracts with account:', deployer.address)
 
-  // 0. 部署 ProxyAdmin (在所有可升级合约之前部署)
-  console.log('Deploying ProxyAdmin...')
-  const ProxyAdmin = await ethers.getContractFactory('ProxyAdmin')
-  const proxyAdmin = await ProxyAdmin.deploy()
-  await proxyAdmin.waitForDeployment()
-  const proxyAdminAddress = await proxyAdmin.getAddress()
-  console.log('ProxyAdmin deployed to:', proxyAdminAddress)
-
   // 1. 部署 AccessControl
   console.log('Deploying AccessControl...')
-  const AccessControl = await ethers.getContractFactory('AccessControl')
-  const accessControl = await AccessControl.deploy(config.merkleRoot)
+  const AccessControlFactory = await ethers.getContractFactory('CustomAccessControl')
+  const accessControl = await AccessControlFactory.deploy(config.merkleRoot)
   await accessControl.waitForDeployment()
   const accessControlAddress = await accessControl.getAddress()
   console.log('AccessControl deployed to:', accessControlAddress)
 
   // 2. 部署 MultiSig
   console.log('Deploying MultiSig...')
-  const MultiSig = await ethers.getContractFactory('MultiSig')
-  const multiSig = await MultiSig.deploy(config.signers, config.threshold, config.delay)
+  const MultiSigFactory = await ethers.getContractFactory('MultiSig')
+  const multiSig = await MultiSigFactory.deploy(config.signers, config.threshold, config.delay)
   await multiSig.waitForDeployment()
   const multiSigAddress = await multiSig.getAddress()
   console.log('MultiSig deployed to:', multiSigAddress)
 
-  // 3. 部署 Vault (可升级)
+  // 3. 部署 Vault (普通合约)
   console.log('Deploying Vault...')
-  const Vault = await ethers.getContractFactory('Vault')
-  const vault = (await upgrades.deployProxy(
-    Vault,
-    [config.name, config.symbol, config.supportedTokens, accessControlAddress],
-    { unsafeAllow: ['constructor'] },
-  )) as unknown as IVault
-
+  const VaultFactory = await ethers.getContractFactory('Vault')
+  const vault = await VaultFactory.deploy(config.name, config.symbol, config.supportedTokens, accessControlAddress)
   await vault.waitForDeployment()
   const vaultAddress = await vault.getAddress()
-  console.log('Vault proxy deployed to:', vaultAddress)
+  console.log('Vault deployed to:', vaultAddress)
 
-  // 4. 部署 Strategy (可升级)
+  // 4. 部署 Strategy (普通合约)
   console.log('Deploying Strategy...')
-  const Strategy = await ethers.getContractFactory('Strategy')
-  const strategy = await upgrades.deployProxy(Strategy, [vaultAddress, config.router, multiSigAddress], {
-    unsafeAllow: ['constructor'],
-  })
-
+  const StrategyFactory = await ethers.getContractFactory('Strategy')
+  const strategy = await StrategyFactory.deploy(
+    vaultAddress,
+    config.router,
+    multiSigAddress, // 初始设置为 multiSig
+  )
   await strategy.waitForDeployment()
   const strategyAddress = await strategy.getAddress()
-  console.log('Strategy proxy deployed to:', strategyAddress)
+  console.log('Strategy deployed to:', strategyAddress)
 
-  // 5. 部署 Governance (可升级)
+  // 5. 部署 Governance (普通合约)
   console.log('Deploying Governance...')
-  const Governance = await ethers.getContractFactory('Governance')
-  const governance = (await upgrades.deployProxy(
-    Governance,
-    [vaultAddress, strategyAddress, config.votingDelay, config.votingPeriod, config.quorumVotes],
-    { unsafeAllow: ['constructor'] },
-  )) as unknown as IGovernance
-
+  const GovernanceFactory = await ethers.getContractFactory('Governance')
+  const governance = await GovernanceFactory.deploy(
+    vaultAddress, // 作为治理代币
+    strategyAddress,
+    config.votingDelay,
+    config.votingPeriod,
+    config.quorumVotes,
+  )
   await governance.waitForDeployment()
   const governanceAddress = await governance.getAddress()
-  await strategy.setGovernance(governanceAddress)
-  console.log('Governance proxy deployed to:', governanceAddress)
+  console.log('Governance deployed to:', governanceAddress)
 
-  // 6. 设置合约间的权限关系
+  // 设置合约间的关系
   console.log('Setting up contract relationships...')
+
+  // 更新 Strategy 的 governance
+  await strategy.setGovernance(governanceAddress)
 
   // 设置 Vault 的关联合约
   await vault.setGovernance(governanceAddress)
   await vault.setStrategy(strategyAddress)
   await vault.setAccessControl(accessControlAddress)
 
-  // Transfer ownership to MultiSig
+  // 转移所有权给 MultiSig
   console.log('Transferring ownership to MultiSig...')
   await vault.transferOwnership(multiSigAddress)
   await strategy.transferOwnership(multiSigAddress)
   await governance.transferOwnership(multiSigAddress)
 
-  // 7. 写入部署信息
+  // 写入部署信息
   const deployInfo = {
-    ProxyAdmin: proxyAdminAddress,
     AccessControl: accessControlAddress,
     MultiSig: multiSigAddress,
     Vault: vaultAddress,
@@ -121,12 +108,8 @@ async function deployDAOContracts(config: DeployConfig) {
   writeContractAddresses(deployInfo)
   console.log('Contract addresses saved to cache')
 
-  // 8. 验证合约
+  // 验证合约
   await verifyContracts({
-    ProxyAdmin: {
-      address: proxyAdminAddress,
-      args: [],
-    },
     AccessControl: {
       address: accessControlAddress,
       args: [config.merkleRoot],
@@ -137,15 +120,15 @@ async function deployDAOContracts(config: DeployConfig) {
     },
     Vault: {
       address: vaultAddress,
-      args: [config.name, config.symbol, config.supportedTokens, accessControlAddress], // 代理合约不需要构造参数
+      args: [config.name, config.symbol, config.supportedTokens, accessControlAddress],
     },
     Strategy: {
       address: strategyAddress,
-      args: [vaultAddress, config.router, governanceAddress], // 确保提供正确的构造参数
+      args: [vaultAddress, config.router, multiSigAddress],
     },
     Governance: {
       address: governanceAddress,
-      args: [vaultAddress, strategyAddress, config.votingDelay, config.votingPeriod, config.quorumVotes], // 确保提供正确的构造参数
+      args: [vaultAddress, strategyAddress, config.votingDelay, config.votingPeriod, config.quorumVotes],
     },
   })
 
@@ -159,8 +142,11 @@ function writeContractAddresses(addresses: Record<string, string>) {
 }
 
 async function verifyContracts(contracts: Record<string, { address: string; args: any[] }>) {
+  console.log('Starting contract verification...')
+
   for (const [name, { address, args }] of Object.entries(contracts)) {
     try {
+      console.log(`Verifying ${name} at ${address}...`)
       await run('verify:verify', {
         address,
         constructorArguments: args,
@@ -169,12 +155,18 @@ async function verifyContracts(contracts: Record<string, { address: string; args
     } catch (error) {
       console.error(`Error verifying ${name}:`, error)
       // 如果验证失败，稍后重试
-      setTimeout(() => {
-        run('verify:verify', {
+      console.log(`Will retry verifying ${name} after 10 seconds delay...`)
+      await delay(10000)
+
+      try {
+        await run('verify:verify', {
           address,
           constructorArguments: args,
         })
-      }, delay)
+        console.log(`${name} verified successfully on retry`)
+      } catch (retryError) {
+        console.error(`Failed to verify ${name} on retry:`, retryError)
+      }
     }
   }
 }
@@ -202,7 +194,6 @@ async function main() {
     signers,
     threshold: 2, // 测试环境只需要1个签名
     delay: 86400, // 添加延迟时间配置(1天)
-    adminDelay: 1800, // 约6小时
   }
   console.log(config.merkleRoot)
   const deployInfo = await deployDAOContracts(config)

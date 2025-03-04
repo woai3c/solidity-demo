@@ -2,7 +2,7 @@ import type { BaseContract, ContractFactory } from 'ethers'
 import { writeFileSync } from 'fs'
 import { run } from 'hardhat'
 
-export const delay = 30000
+export const delayTime = 30000
 
 async function verifyContract(deployedAddress: string, constructorArguments: (string | number)[]) {
   try {
@@ -14,7 +14,7 @@ async function verifyContract(deployedAddress: string, constructorArguments: (st
     console.log('Contract verified successfully')
   } catch (error) {
     console.error('Error verifying the contract:', error)
-    setTimeout(() => verifyContract(deployedAddress, constructorArguments), delay)
+    setTimeout(() => verifyContract(deployedAddress, constructorArguments), delayTime)
   }
 }
 
@@ -37,8 +37,14 @@ export async function deployContract(
 
   console.log('Waiting for Etherscan to update the contract data...')
   // eslint-disable-next-line no-promise-executor-return
-  await new Promise((resolve) => setTimeout(resolve, delay))
+  await delay(delayTime)
 
   // Verify the contract
   verifyContract(deployedAddress, constructorArguments)
+}
+
+export async function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }

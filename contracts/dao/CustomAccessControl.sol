@@ -8,7 +8,7 @@ import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.s
 import { Role } from './types.sol';
 import { RoleControl } from './utils/RoleControl.sol';
 
-contract AccessControl is Ownable, Pausable, ReentrancyGuard, RoleControl {
+contract CustomAccessControl is Ownable, Pausable, ReentrancyGuard, RoleControl {
   // 错误定义
   error InvalidProof();
   error InvalidTier(uint256 tier);

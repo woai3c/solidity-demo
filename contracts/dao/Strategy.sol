@@ -4,23 +4,14 @@ pragma solidity ^0.8.22;
 import { IUniswapV2Router02 } from '@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import { SafeERC20 } from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import { ReentrancyGuardUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
-import { PausableUpgradeable } from '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
-import { OwnableUpgradeable } from '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
-import { UUPSUpgradeable } from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import { Initializable } from '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
+import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
+import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { EnumerableSet } from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import { Role } from './types.sol';
 import { RoleControl } from './utils/RoleControl.sol';
 
-contract Strategy is
-  Initializable,
-  OwnableUpgradeable,
-  ReentrancyGuardUpgradeable,
-  PausableUpgradeable,
-  UUPSUpgradeable,
-  RoleControl
-{
+contract Strategy is Ownable, ReentrancyGuard, Pausable, RoleControl {
   using SafeERC20 for IERC20;
   using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -60,6 +51,7 @@ contract Strategy is
   IUniswapV2Router02 public router;
   uint256 public slippageTolerance;
   bytes32 public DOMAIN_SEPARATOR;
+  address public governance;
 
   mapping(address => bool) public supportedTokens;
   mapping(address => PackedStrategy) public tokenStrategies;
@@ -80,37 +72,17 @@ contract Strategy is
     uint256 timestamp
   );
 
-  // 添加 governance 变量声明
-  address public governance;
-
-  /// @custom:oz-upgrades-unsafe-allow constructor
-  constructor() {
-    _disableInitializers();
-  }
-
-  function initialize(
-    address _vault,
-    address _router,
-    address _governance // 添加 governance 参数
-  ) external initializer {
-    __Ownable_init(msg.sender);
-    __ReentrancyGuard_init();
-    __Pausable_init();
-    __UUPSUpgradeable_init();
-    __RoleControl_init();
-
+  constructor(address _vault, address _router, address _governance) Ownable(msg.sender) {
     if (_vault == address(0) || _router == address(0) || _governance == address(0)) revert ZeroAddress();
     vault = _vault;
     router = IUniswapV2Router02(_router);
-    governance = _governance; // 初始化 governance
+    governance = _governance;
 
     // 将默认值设置移到此处
     slippageTolerance = 50;
 
     DOMAIN_SEPARATOR = keccak256(abi.encode(keccak256('Strategy'), block.chainid, address(this)));
   }
-
-  function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
   modifier onlyVault() {
     if (msg.sender != vault) revert NotSupported(msg.sender);

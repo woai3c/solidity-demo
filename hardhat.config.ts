@@ -3,7 +3,6 @@ import 'dotenv/config'
 import '@nomicfoundation/hardhat-toolbox'
 import 'solidity-coverage'
 import 'tsconfig-paths/register'
-import '@openzeppelin/hardhat-upgrades'
 import '@nomicfoundation/hardhat-ethers'
 
 const config: HardhatUserConfig = {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.20;
 
 interface IPriceFeed {
   function getPrice(address token) external view returns (uint256);
@@ -26,17 +26,6 @@ interface IStrategy {
   function estimateReturns() external view returns (uint256 totalValue);
   function getTokenValue(address token) external view returns (uint256 value);
   function isSupported(address token) external view returns (bool);
-}
-
-interface IUpgradeable {
-  function initialize(bytes memory data) external;
-  function upgradeTo(address newImplementation) external;
-  function upgradeToAndCall(address newImplementation, bytes memory data) external;
-}
-
-interface ITransparentUpgradeableProxy {
-  function upgradeTo(address newImplementation) external;
-  function upgradeToAndCall(address newImplementation, bytes calldata data) external payable;
 }
 
 interface IAccessControl {
