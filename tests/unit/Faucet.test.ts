@@ -1,8 +1,8 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
-import type { MyToken, Faucet } from '../typechain-types'
+import type { MyToken, Faucet } from '../../typechain-types'
 import type { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers'
-import { FAUCET_CONTRACT_NAME, TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/constants'
+import { FAUCET_CONTRACT_NAME, TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/unit/constants'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 
 describe(FAUCET_CONTRACT_NAME, () => {

@@ -1,16 +1,14 @@
 {
-  "extends": ["solhint:recommended", "plugin:prettier/recommended"],
+  "extends": ["solhint:recommended"],
   "plugins": ["prettier"],
   "rules": {
     "prettier/prettier": "error",
     "quotes": "off",
-    "indent": "off",
     "max-line-length": "off",
     "func-visibility": ["warn", { "ignoreConstructors": true }],
-    "compiler-version": ["error", "^0.8.22"],
+    "compiler-version": ["error", "^0.8.20"],
     "no-empty-blocks": "off",
     "no-inline-assembly": "warn",
     "reason-string": ["warn", { "maxLength": 64 }]
-  },
-  "ignorePatterns": ["node_modules/**"]
+  }
 }

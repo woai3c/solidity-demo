@@ -1,0 +1,13 @@
+digraph G {
+  graph [ ratio = "auto", page = "40" ];
+  "MyToken";
+  "IERC20";
+  "Ownable";
+  "Pausable";
+  "ReentrancyGuard";
+  "MyToken" -> "IERC20";
+  "MyToken" -> "Ownable";
+  "MyToken" -> "Pausable";
+  "MyToken" -> "ReentrancyGuard";
+}
+

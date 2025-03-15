@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
-import type { MyNFT } from '../typechain-types'
+import type { MyNFT } from '../../typechain-types'
 import type { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers'
 
 describe('MyNFT', () => {

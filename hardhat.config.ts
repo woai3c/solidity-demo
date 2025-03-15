@@ -4,10 +4,12 @@ import '@nomicfoundation/hardhat-toolbox'
 import 'solidity-coverage'
 import 'tsconfig-paths/register'
 import '@nomicfoundation/hardhat-ethers'
+import 'hardhat-gas-reporter'
+import 'hardhat-contract-sizer'
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: '0.8.22',
+    version: '0.8.20',
     settings: {
       viaIR: true,
       optimizer: {
@@ -21,16 +23,27 @@ const config: HardhatUserConfig = {
       url: `https://sepolia.infura.io/v3/${process.env.TESTNET_INFURA_PROJECT_ID}`,
       accounts: [`0x${process.env.TESTNET_PRIVATE_KEY}`],
     },
-    // mainnet: {
-    //   url: `https://sepolia.infura.io/v3/${process.env.MAINNET_INFURA_PROJECT_ID}`,
-    //   accounts: [`0x${process.env.MAINNET_PRIVATE_KEY}`],
-    // },
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_API_KEY,
   },
   paths: {
     tests: './tests',
+  },
+  gasReporter: {
+    enabled: !!process.env.REPORT_GAS,
+    currency: 'USD',
+    coinmarketcap: process.env.COINMARKETCAP_API_KEY,
+    outputFile: 'gas-report.txt',
+    noColors: true,
+  },
+  contractSizer: {
+    alphaSort: true,
+    runOnCompile: false,
+    disambiguatePaths: false,
+  },
+  mocha: {
+    timeout: 40000,
   },
 }
 

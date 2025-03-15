@@ -1,6 +1,6 @@
 import { expect } from 'chai'
 import { ethers } from 'hardhat'
-import type { DutchAuction, MyToken } from '../typechain-types'
+import type { DutchAuction, MyToken } from '../../typechain-types'
 import type { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 

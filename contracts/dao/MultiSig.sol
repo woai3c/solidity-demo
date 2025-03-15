@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.20;
 
 import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
@@ -312,7 +312,7 @@ contract MultiSig is ReentrancyGuard, Pausable, RoleControl {
       uint256 nonZeroBytes = 0;
       uint256 zeroBytes = 0;
 
-      for (uint i = 0; i < txData.length; ) {
+      for (uint256 i = 0; i < txData.length; ) {
         if (txData[i] == 0) {
           zeroBytes++;
         } else {
@@ -460,7 +460,7 @@ contract MultiSig is ReentrancyGuard, Pausable, RoleControl {
     uint256 length = tokens.length;
     if (amounts.length != 0 && amounts.length != length) revert InvalidInput();
 
-    for (uint i = 0; i < length; ) {
+    for (uint256 i = 0; i < length; ) {
       uint256 amount = amounts.length == 0 ? IERC20(tokens[i]).balanceOf(address(this)) : amounts[i];
 
       IERC20(tokens[i]).safeTransfer(to, amount);
@@ -581,7 +581,7 @@ contract MultiSig is ReentrancyGuard, Pausable, RoleControl {
   ) external onlyOwner whenNotPaused {
     if (tokens.length != recipients.length || tokens.length != amounts.length) revert InvalidInput();
 
-    for (uint i = 0; i < tokens.length; i++) {
+    for (uint256 i = 0; i < tokens.length; i++) {
       bool success = IERC20(tokens[i]).transfer(recipients[i], amounts[i]);
       if (!success) revert CallFailed();
       emit TokensReceived(tokens[i], recipients[i], amounts[i]);

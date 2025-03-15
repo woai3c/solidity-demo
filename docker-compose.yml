@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  audit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/share
+      - audit-cache:/app/cache # 添加持久化缓存卷
+    command: /share/contracts /share/auditReports MyToken.sol MyToken
+
+volumes:
+  audit-cache: # 定义持久化卷

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.20;
 
 import { EIP712 } from '@openzeppelin/contracts/utils/cryptography/EIP712.sol';
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
@@ -244,7 +244,7 @@ contract Governance is EIP712, ReentrancyGuard, Pausable, Ownable, RoleControl {
     if (proposal.forVotes <= proposal.againstVotes) revert ProposalNotPassed(proposal.forVotes, proposal.againstVotes);
 
     // 检查目标合约地址
-    for (uint i = 0; i < proposal.targets.length; i++) {
+    for (uint256 i = 0; i < proposal.targets.length; i++) {
       if (proposal.targets[i] == address(0)) revert ZeroAddress();
       if (proposal.targets[i] == address(this)) revert InvalidTarget();
       // 检查目标是否为合约

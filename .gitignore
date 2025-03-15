@@ -3,6 +3,7 @@ artifacts
 cache
 typechain-types
 .openzeppelin
+gas-report.txt
 
 # Logs
 logs

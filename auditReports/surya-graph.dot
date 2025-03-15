@@ -1,0 +1,132 @@
+digraph G {
+  graph [ ratio = "auto", page = "100", compound =true ];
+subgraph "clusterMyToken" {
+  graph [ label = "MyToken", color = "lightgray", style = "filled", bgcolor = "lightgray" ];
+  "MyToken.<Constructor>" [ label = "<Constructor>", color = "green" ];
+  "MyToken.notBlacklisted" [ label = "notBlacklisted", color = "yellow" ];
+  "MyToken.checkCooldown" [ label = "checkCooldown", color = "yellow" ];
+  "MyToken.totalSupply" [ label = "totalSupply", color = "blue" ];
+  "MyToken.balanceOf" [ label = "balanceOf", color = "blue" ];
+  "MyToken._transfer" [ label = "_transfer", color = "white" ];
+  "MyToken.transfer" [ label = "transfer", color = "blue" ];
+  "MyToken.allowance" [ label = "allowance", color = "blue" ];
+  "MyToken.approve" [ label = "approve", color = "blue" ];
+  "MyToken.transferFrom" [ label = "transferFrom", color = "blue" ];
+  "MyToken.mint" [ label = "mint", color = "blue" ];
+  "MyToken.burn" [ label = "burn", color = "blue" ];
+  "MyToken.setMaxTransferAmount" [ label = "setMaxTransferAmount", color = "blue" ];
+  "MyToken.setCooldownPeriod" [ label = "setCooldownPeriod", color = "blue" ];
+  "MyToken.updateBlacklist" [ label = "updateBlacklist", color = "blue" ];
+  "MyToken.pause" [ label = "pause", color = "blue" ];
+  "MyToken.unpause" [ label = "unpause", color = "blue" ];
+  "MyToken.recoverTokens" [ label = "recoverTokens", color = "blue" ];
+  "MyToken.batchTransfer" [ label = "batchTransfer", color = "blue" ];
+  "MyToken.BlacklistedAddress" [ color = "brown2", shape =box ];
+  "MyToken.owner" [ label = "owner" ];
+  "MyToken.CooldownPeriodNotPassed" [ color = "brown2", shape =box ];
+  "MyToken.address" [ label = "address" ];
+  "MyToken.TransferToZeroAddress" [ color = "brown2", shape =box ];
+  "MyToken.InvalidAmount" [ color = "brown2", shape =box ];
+  "MyToken.ExceedsTransferLimit" [ color = "brown2", shape =box ];
+  "MyToken.InsufficientBalance" [ color = "brown2", shape =box ];
+  "MyToken.Transfer" [ label = "Transfer" ];
+  "MyToken.Approval" [ label = "Approval" ];
+  "MyToken.AllowanceExceeded" [ color = "brown2", shape =box ];
+  "MyToken.MaxSupplyExceeded" [ color = "brown2", shape =box ];
+  "MyToken._pause" [ label = "_pause" ];
+  "MyToken._unpause" [ label = "_unpause" ];
+  "MyToken.IERC20" [ label = "IERC20" ];
+  "MyToken.TokenTransferFailed" [ color = "brown2", shape =box ];
+}
+
+  "MyToken.notBlacklisted";
+  "MyToken.BlacklistedAddress";
+  "MyToken.checkCooldown";
+  "MyToken.owner";
+  "MyToken.CooldownPeriodNotPassed";
+  "MyToken._transfer";
+  "MyToken.address";
+  "MyToken.TransferToZeroAddress";
+  "MyToken.InvalidAmount";
+  "MyToken.ExceedsTransferLimit";
+  "MyToken.InsufficientBalance";
+  "MyToken.Transfer";
+  "MyToken.transfer";
+  "MyToken.approve";
+  "MyToken.Approval";
+  "MyToken.transferFrom";
+  "MyToken.AllowanceExceeded";
+  "MyToken.mint";
+  "MyToken.MaxSupplyExceeded";
+  "MyToken.burn";
+  "MyToken.pause";
+  "MyToken._pause";
+  "MyToken.unpause";
+  "MyToken._unpause";
+  "MyToken.recoverTokens";
+  "MyToken.IERC20";
+  "MyToken.TokenTransferFailed";
+  "MyToken.batchTransfer";
+  "MyToken.notBlacklisted" -> "MyToken.BlacklistedAddress" [ color = "red" ];
+  "MyToken.checkCooldown" -> "MyToken.owner" [ color = "green" ];
+  "MyToken.checkCooldown" -> "MyToken.CooldownPeriodNotPassed" [ color = "red" ];
+  "MyToken._transfer" -> "MyToken.address" [ color = "green" ];
+  "MyToken._transfer" -> "MyToken.address" [ color = "green" ];
+  "MyToken._transfer" -> "MyToken.TransferToZeroAddress" [ color = "red" ];
+  "MyToken._transfer" -> "MyToken.InvalidAmount" [ color = "red" ];
+  "MyToken._transfer" -> "MyToken.ExceedsTransferLimit" [ color = "red" ];
+  "MyToken._transfer" -> "MyToken.InsufficientBalance" [ color = "red" ];
+  "MyToken._transfer" -> "MyToken.Transfer" [ color = "green" ];
+  "MyToken.transfer" -> "MyToken._transfer" [ color = "green" ];
+  "MyToken.approve" -> "MyToken.Approval" [ color = "green" ];
+  "MyToken.transferFrom" -> "MyToken.AllowanceExceeded" [ color = "red" ];
+  "MyToken.transferFrom" -> "MyToken._transfer" [ color = "green" ];
+  "MyToken.mint" -> "MyToken.MaxSupplyExceeded" [ color = "red" ];
+  "MyToken.mint" -> "MyToken.Transfer" [ color = "green" ];
+  "MyToken.mint" -> "MyToken.address" [ color = "green" ];
+  "MyToken.burn" -> "MyToken.InsufficientBalance" [ color = "red" ];
+  "MyToken.burn" -> "MyToken.Transfer" [ color = "green" ];
+  "MyToken.burn" -> "MyToken.address" [ color = "green" ];
+  "MyToken.pause" -> "MyToken._pause" [ color = "green" ];
+  "MyToken.unpause" -> "MyToken._unpause" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken.address" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken.TransferToZeroAddress" [ color = "red" ];
+  "MyToken.recoverTokens" -> "MyToken.InvalidAmount" [ color = "red" ];
+  "MyToken.recoverTokens" -> "MyToken.address" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken._transfer" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken.address" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken.IERC20" [ color = "green" ];
+  "MyToken.recoverTokens" -> "MyToken.TokenTransferFailed" [ color = "red" ];
+  "MyToken.batchTransfer" -> "MyToken.InsufficientBalance" [ color = "red" ];
+  "MyToken.batchTransfer" -> "MyToken._transfer" [ color = "green" ];
+
+
+rankdir=LR
+node [shape=plaintext]
+subgraph cluster_01 { 
+label = "Legend";
+key [label=<<table border="0" cellpadding="2" cellspacing="0" cellborder="0">
+  <tr><td align="right" port="i1">Internal Call</td></tr>
+  <tr><td align="right" port="i2">External Call</td></tr>
+  <tr><td align="right" port="i2">Custom Error Call</td></tr>
+  <tr><td align="right" port="i3">Defined Contract</td></tr>
+  <tr><td align="right" port="i4">Undefined Contract</td></tr>
+  </table>>]
+key2 [label=<<table border="0" cellpadding="2" cellspacing="0" cellborder="0">
+  <tr><td port="i1">&nbsp;&nbsp;&nbsp;</td></tr>
+  <tr><td port="i2">&nbsp;&nbsp;&nbsp;</td></tr>
+  <tr><td port="i3" bgcolor="lightgray">&nbsp;&nbsp;&nbsp;</td></tr>
+  <tr><td port="i4">
+    <table border="1" cellborder="0" cellspacing="0" cellpadding="7" color="lightgray">
+      <tr>
+       <td></td>
+      </tr>
+     </table>
+  </td></tr>
+  </table>>]
+key:i1:e -> key2:i1:w [color="green"]
+key:i2:e -> key2:i2:w [color="orange"]
+key:i2:e -> key2:i2:w [color="red"]
+}
+}
+
