@@ -19,9 +19,10 @@ describe('MyToken Security Tests [security]', () => {
       // gasLimit: 6000000 // 可以指定gas限制
     })
 
+    await token.waitForDeployment()
     const MockAttacker = await ethers.getContractFactory('MockAttacker')
     const attacker = await MockAttacker.deploy(await token.getAddress())
-
+    await attacker.waitForDeployment()
     return { token, attacker, owner, addr1, addr2, addrs }
   }
 
@@ -109,23 +110,21 @@ describe('MyToken Security Tests [security]', () => {
 
   describe('Security Features', () => {
     it('Should prevent reentrancy attacks', async () => {
-      // 给 token 和 attacker 准备初始状态
+      // 铸造代币并转给攻击合约
       await token.mint(1000)
+      await token.transfer(await attacker.getAddress(), 500)
 
-      // 给攻击者合约转账一些代币用于攻击
-      await token.transfer(await attacker.getAddress(), 200)
+      // 重置攻击计数
+      await attacker.resetCount()
 
-      // 检查初始攻击计数
+      // 验证初始计数为0
       expect(await attacker.attackCount()).to.equal(0)
 
-      // 尝试执行攻击 - 应该被 nonReentrant 修饰器阻止重入
+      // 执行攻击
       await attacker.attack()
 
-      // 验证攻击计数
-      const count = await attacker.attackCount()
-
-      // 我们应该看到攻击尝试被记录，但没有成功执行多次重入
-      expect(count).to.equal(1, 'Reentrancy protection should limit attack to one attempt')
+      // 验证攻击后计数为1
+      expect(await attacker.attackCount()).to.equal(1)
     })
 
     it('Should enforce transfer limits', async () => {
@@ -134,29 +133,29 @@ describe('MyToken Security Tests [security]', () => {
     })
 
     it('Should enforce cooldown period', async () => {
-      // 铸造一些代币用于测试
+      // 铸造代币
       await token.mint(1000)
 
-      // 设置一个较短的冷却期，便于测试
-      await token.setCooldownPeriod(60) // 60秒
+      // 转账给addr1账户一些代币
+      await token.transfer(addr1.address, 300)
 
-      // 执行第一次转账
-      await token.transfer(addr1.address, 100)
+      // 设置一个明确的冷却期
+      await token.setCooldownPeriod(60) // 设置60秒冷却期
 
-      // 获取当前时间戳
-      const latestTime = await time.latest()
+      // 让addr1执行第一次转账 (非所有者)
+      await token.connect(addr1).transfer(addr2.address, 100)
 
-      // 确保下一个块的时间戳与当前相同 (不增加时间)
-      await time.setNextBlockTimestamp(latestTime)
+      // 立即让addr1执行第二次转账 - 应该失败（冷却期内）
+      await expect(token.connect(addr1).transfer(addr2.address, 100)).to.be.revertedWithCustomError(
+        token,
+        'CooldownPeriodNotPassed',
+      )
 
-      // 尝试第二次转账 - 应该因为冷却期而失败
-      await expect(token.transfer(addr1.address, 100)).to.be.revertedWithCustomError(token, 'CooldownPeriodNotPassed')
+      // 增加时间
+      await time.increase(70) // 增加70秒，超过冷却期
 
-      // 增加时间超过冷却期
-      await time.increaseTo(latestTime + 61)
-
-      // 尝试转账 - 现在应该成功
-      await expect(token.transfer(addr1.address, 100)).to.not.be.reverted
+      // 现在冷却期已过，addr1再次尝试转账 - 应该成功
+      await expect(token.connect(addr1).transfer(addr2.address, 100)).to.not.be.reverted
     })
 
     it('Should handle blacklist correctly', async () => {

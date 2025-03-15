@@ -20,7 +20,6 @@ RUN apt-get update && apt-get install -y \
 FROM base as dependencies
 WORKDIR /deps
 COPY package.json ./
-RUN npm i solhint -D
 RUN npm i
 
 # 最终镜像

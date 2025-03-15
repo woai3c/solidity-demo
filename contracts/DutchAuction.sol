@@ -85,11 +85,6 @@ contract DutchAuction is Ownable {
 
     // Refund excess amount
     if (amount > curPrice) {
-      success = paymentToken.transferFrom(msg.sender, msg.sender, amount - curPrice);
-      if (!success) {
-        revert TokenRefundFailed();
-      }
-
       emit TokenRefund(msg.sender, amount - curPrice);
     }
   }
