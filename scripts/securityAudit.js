@@ -28,15 +28,18 @@ function runCommand(command, options = {}) {
     const result = execSync(command, { encoding: 'utf8', ...options })
     return { success: true, output: result.trim(), exitCode: 0 }
   } catch (error) {
-    // 如果有stdout输出且包含分析结果，认为是"发现问题"而不是失败
-    const hasAnalysisOutput =
-      error.stdout && (error.stdout.includes('analyzed') || error.stdout.includes('result(s) found'))
+    // 组合stdout和stderr获得完整输出
+    const fullOutput = [error.stdout || '', error.stderr || ''].filter(Boolean).join('\n')
+
+    // 如果有分析结果，认为是"发现问题"而不是失败
+    const hasAnalysisOutput = fullOutput && (fullOutput.includes('analyzed') || fullOutput.includes('result(s) found'))
 
     return {
-      success: hasAnalysisOutput, // 有分析输出视为成功但有问题
+      success: hasAnalysisOutput,
       foundIssues: hasAnalysisOutput,
-      output: error.stdout ? error.stdout : error.message,
+      output: fullOutput || error.message,
       exitCode: error.status || 1,
+      error, // 保留原始错误对象以备调试
     }
   }
 }
@@ -161,14 +164,15 @@ async function main() {
       }
     }
 
+    // 运行Mythril
     // 运行Mythril (如果不跳过)
     log(colors.GREEN, '运行 Mythril 分析 (可能需要几分钟)...')
 
     const mythrilCmd = `timeout 300s myth analyze ${contractFile} \
-      --solv 0.8.20 \
-      -o markdown \
-      --max-depth 10 \
-      --solc-json /app/mythril-solc.json`
+  --solv 0.8.20 \
+  -o markdown \
+  --max-depth 10 \
+  --solc-remaps "@openzeppelin=/app/node_modules/@openzeppelin @chainlink=/app/node_modules/@chainlink @uniswap=/app/node_modules/@uniswap"`
 
     const mythrilResult = runCommand(mythrilCmd)
 
@@ -178,7 +182,27 @@ async function main() {
     } else {
       log(colors.RED, 'Mythril分析失败或超时:')
       log(colors.RED, mythrilResult.output)
-      await fsPromises.writeFile(`${contractOutputDir}/mythril-report.md`, 'Mythril分析失败或超时')
+
+      // 创建更详细的错误报告
+      const errorReport = `# Mythril分析失败
+
+## 错误详情
+\`\`\`
+${mythrilResult.output}
+\`\`\`
+
+## 可能的原因
+- Solidity版本不兼容
+- 导入路径问题
+- 配置参数错误
+- 分析超时(设置了300秒限制)
+
+## 诊断信息
+- 退出码: ${mythrilResult.exitCode}
+- 命令: \`${mythrilCmd}\`
+`
+
+      await fsPromises.writeFile(`${contractOutputDir}/mythril-report.md`, errorReport)
     }
 
     // 运行Solhint
@@ -341,12 +365,13 @@ ${fs.readFileSync(`${contractOutputDir}/slither-output.txt`, 'utf8')}
     lowIssues = 0
 
   // 遍历各个合约目录
-  // 遍历各个合约目录
   for (const dir of contractDirs) {
     const slitherFilePath = path.join(OUTPUT_DIR, dir, 'slither-results.json')
     const slitherOutputFile = path.join(OUTPUT_DIR, dir, 'slither-output.txt')
 
-    // 尝试从JSON文件读取结果
+    let foundIssues = false
+
+    // 首先尝试JSON文件
     if (fs.existsSync(slitherFilePath)) {
       try {
         const data = JSON.parse(fs.readFileSync(slitherFilePath, 'utf8'))
@@ -355,30 +380,63 @@ ${fs.readFileSync(`${contractOutputDir}/slither-output.txt`, 'utf8')}
             if (issue.impact === 'High') highIssues++
             else if (issue.impact === 'Medium') mediumIssues++
             else if (issue.impact === 'Low') lowIssues++
+            foundIssues = true
           })
         }
       } catch (err) {
-        console.error(`Error parsing JSON for ${dir}:`, err)
-
-        // 如果JSON解析失败，尝试从原始输出文本中提取结果
-        if (fs.existsSync(slitherOutputFile)) {
-          const outputText = fs.readFileSync(slitherOutputFile, 'utf8')
-
-          // 从文本中提取严重性信息
-          if (outputText.includes('high severity')) highIssues++
-          if (outputText.includes('medium severity')) mediumIssues++
-          if (outputText.includes('low severity')) lowIssues++
-
-          // 基于关键词判断问题严重性
-          if (
-            outputText.includes('arbitrary user')
-            || outputText.includes('sends eth to arbitrary')
-            || outputText.includes('Reentrancy')
-          ) {
-            highIssues++
-          }
-        }
+        console.log(`JSON解析错误 ${dir}:`, err.message)
       }
+    }
+
+    // 如果JSON解析没有找到问题，尝试从文本输出中提取
+    if (!foundIssues && fs.existsSync(slitherOutputFile)) {
+      const outputText = fs.readFileSync(slitherOutputFile, 'utf8')
+
+      // 1. 重入攻击检测
+      if (outputText.includes('Reentrancy')) {
+        highIssues++
+        foundIssues = true
+      }
+
+      // 2. 发送ETH给任意地址
+      if (
+        outputText.includes('sends eth to arbitrary')
+        || outputText.includes('arbitrary user')
+        || outputText.includes('to arbitrary destinations')
+      ) {
+        highIssues++
+        foundIssues = true
+      }
+
+      // 3. 其他常见高危问题检测
+      if (
+        outputText.includes('unchecked call')
+        || outputText.includes('arbitrary external call')
+        || (outputText.includes('unprotected') && outputText.includes('transfer'))
+      ) {
+        highIssues++
+      }
+
+      // 4. 中危问题
+      if (
+        outputText.includes('block.timestamp')
+        || outputText.includes('weak randomness')
+        || outputText.includes('dangerous comparison')
+      ) {
+        mediumIssues++
+      }
+
+      // 5. 低危问题
+      if (
+        (outputText.includes('should be') && outputText.includes('constant'))
+        || (outputText.includes('should be') && outputText.includes('immutable'))
+        || outputText.includes('unused return')
+      ) {
+        lowIssues++
+      }
+
+      // 6. 输出问题计数调试信息
+      console.log(`${dir} 文本分析: 发现高危:${highIssues} 中危:${mediumIssues} 低危:${lowIssues}`)
     }
   }
 
