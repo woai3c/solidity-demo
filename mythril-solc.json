@@ -1,0 +1,7 @@
+{
+  "remappings": [
+    "@openzeppelin=/app/node_modules/@openzeppelin",
+    "@chainlink=/app/node_modules/@chainlink",
+    "@uniswap=/app/node_modules/@uniswap"
+  ]
+}

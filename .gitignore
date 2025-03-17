@@ -4,6 +4,7 @@ cache
 typechain-types
 .openzeppelin
 gas-report.txt
+auditReports
 
 # Logs
 logs

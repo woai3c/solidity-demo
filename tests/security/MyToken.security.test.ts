@@ -9,11 +9,10 @@ describe('MyToken Security Tests [security]', () => {
   let owner: SignerWithAddress
   let addr1: SignerWithAddress
   let addr2: SignerWithAddress
-  let addrs: SignerWithAddress[]
   let attacker: MockAttacker
 
   async function deployTokenFixture() {
-    const [owner, addr1, addr2, ...addrs] = await ethers.getSigners()
+    const [owner, addr1, addr2] = await ethers.getSigners()
     const Token = await ethers.getContractFactory('MyToken')
     const token = await Token.deploy('Test Token', 'TEST', owner.address, {
       // gasLimit: 6000000 // 可以指定gas限制
@@ -23,7 +22,7 @@ describe('MyToken Security Tests [security]', () => {
     const MockAttacker = await ethers.getContractFactory('MockAttacker')
     const attacker = await MockAttacker.deploy(await token.getAddress())
     await attacker.waitForDeployment()
-    return { token, attacker, owner, addr1, addr2, addrs }
+    return { token, attacker, owner, addr1, addr2 }
   }
 
   beforeEach(async () => {
@@ -33,7 +32,6 @@ describe('MyToken Security Tests [security]', () => {
     owner = fixture.owner
     addr1 = fixture.addr1
     addr2 = fixture.addr2
-    addrs = fixture.addrs
   })
 
   describe('Stress Tests', () => {

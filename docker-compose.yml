@@ -6,9 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     volumes:
-      - ./:/share
-      - audit-cache:/app/cache # 添加持久化缓存卷
-    command: /share/contracts /share/auditReports MyToken.sol MyToken
-
-volumes:
-  audit-cache: # 定义持久化卷
+      - ./auditReports:/app/auditReports
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=8192
+    mem_limit: 8g

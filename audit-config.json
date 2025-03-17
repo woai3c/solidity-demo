@@ -6,5 +6,9 @@
   "exclude_medium": false,
   "exclude_high": false,
   "detectors_to_run": "all",
-  "solc_remaps": "@openzeppelin/=node_modules/@openzeppelin/"
+  "solc_remaps": [
+    "@openzeppelin/=node_modules/@openzeppelin/",
+    "@chainlink/=node_modules/@chainlink/",
+    "@uniswap/=node_modules/@uniswap/"
+  ]
 }

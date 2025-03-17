@@ -1,42 +1,34 @@
-# 使用多阶段构建减少镜像大小
-FROM trailofbits/eth-security-toolbox:latest as base
+FROM trailofbits/eth-security-toolbox:latest
 
-# 合并RUN指令减少层数
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
-    curl \
-    graphviz \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get update \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/* \
-    && solc-select install 0.8.20 \
-    && solc-select use 0.8.20 \
-    && pip3 install --no-cache-dir mythril \
-    && npm install -g surya  
-
-# 生成项目依赖
-FROM base as dependencies
-WORKDIR /deps
-COPY package.json ./
-RUN npm i
-
-# 最终镜像
-FROM base
 WORKDIR /app
 
-# 复制依赖和脚本 - 使用COPY代替ADD提高性能
-COPY --from=dependencies /deps/node_modules /app/node_modules
-COPY scripts/securityAudit.sh /app/securityAudit.sh
-COPY .solhint.json ./
-COPY hardhat.config.ts ./
-RUN chmod +x /app/securityAudit.sh
+# 1. 先复制依赖文件 - 利用缓存机制
+COPY package.json ./
+RUN npm i && \
+    npm install -g surya glob
 
-# 设置缓存目录和命令 - 添加缓存目录加速重复审计
-RUN mkdir -p /app/cache
-ENV MYTHRIL_CACHE=/app/cache
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+# 2. 安装系统依赖并清理 - 一次性完成减少层数
+RUN apt-get update && apt-get install -y \
+    build-essential python3-dev graphviz nodejs --no-install-recommends && \
+    solc-select install 0.8.20 && \
+    solc-select use 0.8.20 && \
+    pip3 install --no-cache-dir mythril && \
+    # 清理缓存减少体积
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# 设置入口
-ENTRYPOINT ["/app/securityAudit.sh"]
+# 3. 复制很少变化的配置文件
+COPY .solhintignore hardhat.config.ts audit-config.json mythril-solc.json ./
+
+# 4. 复制可能经常变化的脚本文件
+COPY scripts/securityAudit.js ./
+RUN chmod +x ./securityAudit.js
+
+# 5. 最后复制最频繁变化的合约代码
+COPY contracts /app/contracts
+
+# 配置环境
+ENV NODE_OPTIONS="--max-old-space-size=8192" \
+    NODE_PATH=/app/node_modules
+
+ENTRYPOINT ["node", "/app/securityAudit.js", "/app/contracts", "/app/auditReports"]
