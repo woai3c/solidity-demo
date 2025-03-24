@@ -41,7 +41,7 @@ contract MyTokenFuzzTest is Test {
 
     uint256 totalAmount = 0;
 
-    for (uint i = 0; i < recipientCount; i++) {
+    for (uint256 i = 0; i < recipientCount; i++) {
       // 使用确定但不同的地址
       recipients[i] = address(uint160(i + 1000));
       // 随机1-10代币
@@ -57,12 +57,12 @@ contract MyTokenFuzzTest is Test {
     uint256 initialBalance = token.balanceOf(owner);
 
     // 执行批量转账
-    for (uint i = 0; i < recipientCount; i++) {
+    for (uint256 i = 0; i < recipientCount; i++) {
       token.transfer(recipients[i], amounts[i]);
     }
 
     // 验证所有接收者都收到了正确金额
-    for (uint i = 0; i < recipientCount; i++) {
+    for (uint256 i = 0; i < recipientCount; i++) {
       assertEq(token.balanceOf(recipients[i]), amounts[i]);
     }
 

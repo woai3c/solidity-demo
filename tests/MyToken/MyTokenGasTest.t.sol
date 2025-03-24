@@ -19,7 +19,7 @@ contract MyTokenGasTest is Test {
 
   // 测量批量转账gas成本
   function testMultipleTransfersGas() public {
-    for (uint i = 0; i < 5; i++) {
+    for (uint256 i = 0; i < 5; i++) {
       token.transfer(address(uint160(i + 1000)), 100);
     }
   }
