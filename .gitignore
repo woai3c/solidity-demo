@@ -5,6 +5,8 @@ typechain-types
 .openzeppelin
 gas-report.txt
 auditReports
+foundry-out
+foundry-cache
 
 # Logs
 logs

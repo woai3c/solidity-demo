@@ -3,7 +3,7 @@ import { ethers } from 'hardhat'
 import { ZeroAddress } from 'ethers'
 import type { MyToken } from '../../typechain-types'
 import type { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers'
-import { TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/unit/constants'
+import { TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/utils/constants'
 
 describe(TOKEN_CONTRACT_NAME, () => {
   let myToken: MyToken

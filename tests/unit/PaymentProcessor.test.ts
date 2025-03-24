@@ -2,7 +2,7 @@ import { expect } from 'chai'
 import { ethers } from 'hardhat'
 import type { MyToken, PaymentProcessor } from '../../typechain-types'
 import type { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers'
-import { PAYMENT_CONTRACT_NAME, TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/unit/constants'
+import { PAYMENT_CONTRACT_NAME, TOKEN_CONTRACT_NAME, TOKEN_CONTRACT_SYMBOL } from '@tests/utils/constants'
 
 describe(PAYMENT_CONTRACT_NAME, () => {
   let myToken: MyToken

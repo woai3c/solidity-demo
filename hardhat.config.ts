@@ -6,8 +6,9 @@ import 'tsconfig-paths/register'
 import '@nomicfoundation/hardhat-ethers'
 import 'hardhat-gas-reporter'
 import 'hardhat-contract-sizer'
+import '@nomicfoundation/hardhat-foundry'
 
-const config: HardhatUserConfig = {
+const config = {
   solidity: {
     version: '0.8.20',
     settings: {
@@ -29,6 +30,11 @@ const config: HardhatUserConfig = {
   },
   paths: {
     tests: './tests',
+    sources: './contracts',
+  },
+  foundry: {
+    testDir: './tests',
+    spinUpNode: true,
   },
   gasReporter: {
     enabled: !!process.env.REPORT_GAS,

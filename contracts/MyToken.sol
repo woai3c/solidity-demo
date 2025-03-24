@@ -2,11 +2,12 @@
 pragma solidity ^0.8.20;
 
 import { IERC20 } from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import { IERC20Metadata } from '@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol';
 import { Ownable } from '@openzeppelin/contracts/access/Ownable.sol';
 import { Pausable } from '@openzeppelin/contracts/utils/Pausable.sol';
 import { ReentrancyGuard } from '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 
-contract MyToken is IERC20, Ownable, Pausable, ReentrancyGuard {
+contract MyToken is IERC20, IERC20Metadata, Ownable, Pausable, ReentrancyGuard {
   // 错误定义
   error InsufficientBalance(uint256 available, uint256 required);
   error AllowanceExceeded(uint256 available, uint256 required);
@@ -25,6 +26,7 @@ contract MyToken is IERC20, Ownable, Pausable, ReentrancyGuard {
 
   string public name;
   string public symbol;
+  uint8 public decimals = 6;
   uint256 private _totalSupply;
 
   mapping(address => uint256) private _balances;
